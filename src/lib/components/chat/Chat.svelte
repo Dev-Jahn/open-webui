@@ -1980,7 +1980,11 @@
 					// Skip this check if image generation is enabled, as images may be for editing or are generated outputs in the history
 					const hasImages = createMessagesList(_history, parentId).some((message) =>
 						message.files?.some(
-							(file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')
+							(file) =>
+								file.type === 'image' ||
+								file.type === 'video' ||
+								(file?.content_type ?? '').startsWith('image/') ||
+								(file?.content_type ?? '').startsWith('video/')
 						)
 					);
 
@@ -2143,12 +2147,15 @@
 				const imageFiles = (message?.files ?? []).filter(
 					(file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')
 				);
+				const videoFiles = (message?.files ?? []).filter(
+					(file) => file.type === 'video' || (file?.content_type ?? '').startsWith('video/')
+				);
 
 				return {
 					role: message.role,
 					// Preserve output items so backend can reconstruct tool_calls/tool-role messages (temp chats)
 					...(message.output ? { output: message.output } : {}),
-					...(message.role === 'user' && imageFiles.length > 0
+					...(message.role === 'user' && (imageFiles.length > 0 || videoFiles.length > 0)
 						? {
 								content: [
 									{
@@ -2160,6 +2167,10 @@
 										image_url: {
 											url: file.url
 										}
+									})),
+									...videoFiles.map((file) => ({
+										type: 'video',
+										video: file.url
 									}))
 								]
 							}

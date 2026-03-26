@@ -946,6 +946,14 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 ####################################
+# Video Settings
+####################################
+
+VIDEO_SHARED_PATH = os.environ.get('VIDEO_SHARED_PATH', '')
+VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.mkv', '.avi'}
+
+
+####################################
 # Cache DIR
 ####################################
 

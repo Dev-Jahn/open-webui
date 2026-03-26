@@ -2066,6 +2066,123 @@ async def convert_url_images_to_base64(form_data):
     return form_data
 
 
+VIDEO_URL_PATTERN = re.compile(
+    r'((?:https?://|file://)\S+\.(?:mp4|webm|mov|mkv|avi)(?:\?[^\s]*)?)(?:\s|$)',
+    re.IGNORECASE,
+)
+
+
+def _extract_videos_from_string(text: str):
+    """Returns (cleaned_text, list_of_video_content_blocks)."""
+    matches = VIDEO_URL_PATTERN.findall(text)
+    if not matches:
+        return text, []
+
+    video_parts = []
+    cleaned_text = text
+
+    for url in matches:
+        cleaned_text = cleaned_text.replace(url, '').strip()
+
+        if url.startswith('file://'):
+            local_path = url[7:]  # Strip file:// scheme
+            video_parts.append({'type': 'video', 'video': local_path})
+        else:
+            video_parts.append({'type': 'video_url', 'video_url': {'url': url}})
+
+    return cleaned_text, video_parts
+
+
+def extract_video_urls_from_text(form_data: dict) -> dict:
+    """
+    Scan user message text for video URLs (http(s):// and file://) and
+    extract them into structured content blocks for vllm-mlx.
+    """
+    messages = form_data.get('messages', [])
+
+    for message in messages:
+        if message.get('role') != 'user':
+            continue
+
+        content = message.get('content')
+        if isinstance(content, str):
+            text_part, video_parts = _extract_videos_from_string(content)
+            if video_parts:
+                message['content'] = [
+                    {'type': 'text', 'text': text_part},
+                    *video_parts,
+                ]
+        elif isinstance(content, list):
+            new_content = []
+            for item in content:
+                if isinstance(item, dict) and item.get('type') == 'text':
+                    text = item.get('text', '')
+                    text_part, video_parts = _extract_videos_from_string(text)
+                    if video_parts:
+                        new_content.append({'type': 'text', 'text': text_part})
+                        new_content.extend(video_parts)
+                    else:
+                        new_content.append(item)
+                else:
+                    new_content.append(item)
+            message['content'] = new_content
+
+    return form_data
+
+
+def resolve_video_content_blocks(form_data: dict) -> dict:
+    """
+    For content blocks with type 'video', resolve file IDs to local filesystem
+    paths that vllm-mlx can read directly via bind mount.
+    """
+    from open_webui.config import UPLOAD_DIR, VIDEO_SHARED_PATH
+    from open_webui.models.files import Files
+    from open_webui.storage.provider import Storage
+    from pathlib import Path
+
+    messages = form_data.get('messages', [])
+
+    for message in messages:
+        content = message.get('content')
+        if not isinstance(content, list):
+            continue
+
+        new_content = []
+        for item in content:
+            if not isinstance(item, dict) or item.get('type') != 'video':
+                new_content.append(item)
+                continue
+
+            video_ref = item.get('video', '')
+
+            if video_ref.startswith('/'):
+                # Already a local path
+                new_content.append(item)
+            elif video_ref.startswith('http://') or video_ref.startswith('https://'):
+                # Convert to video_url type
+                new_content.append({
+                    'type': 'video_url',
+                    'video_url': {'url': video_ref},
+                })
+            else:
+                # Assume file ID — resolve to local path
+                file = Files.get_file_by_id(video_ref)
+                if file:
+                    file_path = Storage.get_file(file.path)
+                    if VIDEO_SHARED_PATH:
+                        filename = Path(file_path).name
+                        shared_path = str(Path(VIDEO_SHARED_PATH) / filename)
+                    else:
+                        shared_path = file_path
+                    new_content.append({'type': 'video', 'video': shared_path})
+                else:
+                    new_content.append(item)
+
+        message['content'] = new_content
+
+    return form_data
+
+
 def load_messages_from_db(chat_id: str, message_id: str) -> Optional[list[dict]]:
     """
     Load the message chain from DB up to message_id,
@@ -2154,14 +2271,19 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             system_message = get_system_message(form_data.get('messages', []))
             form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
 
-            # Inject image files into content as image_url parts (mirrors frontend logic)
+            # Inject image/video files into content blocks (mirrors frontend logic)
             for message in form_data['messages']:
                 image_files = [
                     f
                     for f in message.get('files', [])
                     if f.get('type') == 'image' or (f.get('content_type') or '').startswith('image/')
                 ]
-                if message.get('role') == 'user' and image_files:
+                video_files = [
+                    f
+                    for f in message.get('files', [])
+                    if f.get('type') == 'video' or (f.get('content_type') or '').startswith('video/')
+                ]
+                if message.get('role') == 'user' and (image_files or video_files):
                     text_content = message.get('content', '')
                     if isinstance(text_content, str):
                         message['content'] = [
@@ -2172,6 +2294,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                                     'image_url': {'url': f['url']},
                                 }
                                 for f in image_files
+                                if f.get('url')
+                            ],
+                            *[
+                                {
+                                    'type': 'video',
+                                    'video': f['url'],
+                                }
+                                for f in video_files
                                 if f.get('url')
                             ],
                         ]
@@ -2191,6 +2321,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             pass
 
     form_data = await convert_url_images_to_base64(form_data)
+    form_data = extract_video_urls_from_text(form_data)
+    form_data = resolve_video_content_blocks(form_data)
 
     event_emitter = get_event_emitter(metadata)
     event_caller = get_event_call(metadata)
