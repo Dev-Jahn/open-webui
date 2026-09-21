@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { marked } from 'marked';
 	import DOMPurify from 'dompurify';
+	import equal from 'fast-deep-equal';
 
 	marked.use({
 		breaks: true,
@@ -35,6 +36,18 @@
 		headingStyle: 'atx'
 	});
 	turndownService.escape = (string) => string;
+
+	// Produce single newlines between paragraphs instead of double.
+	// TipTap wraps every line in <p> tags; the default Turndown rule emits
+	// \n\n around each paragraph which then required a destructive
+	// replaceAll('\n\n','\n') that also wiped blank lines inside code blocks.
+	// This rule eliminates that hack so <pre><code> content is untouched.
+	turndownService.addRule('singleNewlineParagraphs', {
+		filter: 'p',
+		replacement: function (content) {
+			return '\n' + content + '\n';
+		}
+	});
 
 	// Use turndown-plugin-gfm for proper GFM table support
 	turndownService.use(gfm);
@@ -81,6 +94,12 @@
 		}
 	});
 
+	// Registered after use(gfm) to override its checkbox rule; taskListItems owns the marker.
+	turndownService.addRule('taskItemCheckbox', {
+		filter: (node) => node.nodeName === 'INPUT' && node.getAttribute('type') === 'checkbox',
+		replacement: () => ''
+	});
+
 	turndownService.addRule('taskListItems', {
 		filter: (node) =>
 			node.nodeName === 'LI' &&
@@ -88,21 +107,27 @@
 				node.getAttribute('data-checked') === 'false'),
 		replacement: function (content, node) {
 			const checked = node.getAttribute('data-checked') === 'true';
-			content = content.replace(/^\s+/, '');
+			// Trim TipTap's block wrapper; 4-space continuation keeps sublists and fences nested.
+			content = content.trim().replace(/\n(?=.)/g, '\n    ');
 			return `- [${checked ? 'x' : ' '}] ${content}\n`;
 		}
 	});
 
-	// Convert TipTap mention spans -> <@id>
+	// Convert TipTap mention spans -> serialized mention tags.
 	turndownService.addRule('mentions', {
 		filter: (node) => node.nodeName === 'SPAN' && node.getAttribute('data-type') === 'mention',
 		replacement: (_content, node: HTMLElement) => {
 			const id = node.getAttribute('data-id') || '';
 			// TipTap stores the trigger char in data-mention-suggestion-char (usually "@")
 			const ch = node.getAttribute('data-mention-suggestion-char') || '@';
-			// Emit <@id> style, e.g. <@llama3.2:latest>
-			return `<${ch}${id}>`;
+			const mentionChar = ch === '/' ? '$' : ch;
+			return `<${mentionChar}${id}>`;
 		}
+	});
+
+	turndownService.addRule('underline', {
+		filter: 'u',
+		replacement: (content) => `<u>${content}</u>`
 	});
 
 	import { onMount, onDestroy, tick, getContext } from 'svelte';
@@ -136,6 +161,7 @@
 	import Typography from '@tiptap/extension-typography';
 	import Highlight from '@tiptap/extension-highlight';
 	import Code from '@tiptap/extension-code';
+	import Italic from '@tiptap/extension-italic';
 	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 
 	// WORKAROUND: TipTap's default Code mark input rule regex captures the
@@ -152,6 +178,16 @@
 					type: this.type
 				})
 			];
+		}
+	});
+
+	// Prompt inputs need literal asterisks preserved, while toolbar-applied italic should still work.
+	const PromptItalic = Italic.extend({
+		addInputRules() {
+			return [];
+		},
+		addPasteRules() {
+			return [];
 		}
 	});
 
@@ -256,6 +292,14 @@
 		});
 	};
 
+	const getMentionText = ({ node, suggestion }) => {
+		const id = node.attrs.id ?? '';
+		const label = node.attrs.label ?? id;
+		const ch = node.attrs.mentionSuggestionChar ?? suggestion?.char ?? '@';
+		const char = ch === '/' ? '$' : ch;
+		return `${char}${label}`;
+	};
+
 	export let onSelectionUpdate = (e) => {};
 
 	export let id = '';
@@ -288,6 +332,8 @@
 	let floatingMenuElement: Element | null = null;
 	let bubbleMenuElement: Element | null = null;
 	let element: Element | null = null;
+
+	let pendingUpdate = null;
 
 	const options = {
 		throwOnError: false
@@ -435,14 +481,10 @@
 
 	export const setText = (text: string) => {
 		if (!editor || !editor.view) return;
-		text = text.replaceAll('\n\n', '\n');
 
 		if (text === '') {
 			editor.commands.clearContent();
 		} else {
-			// Regex to find serialized mention tags: <@id>, <#id>, <$id|label>
-			const mentionReG = /<([@#$])([\w.\-:/]+)(?:\|([^>]*))?>/g;
-
 			// Convert each line to a <p>, replacing mention tags with proper
 			// TipTap mention spans that the editor's DOMParser will recognise.
 			const lines = text.split('\n');
@@ -455,10 +497,14 @@
 					const escaped = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 					// Now replace the escaped mention patterns back into real spans
 					const withMentions = escaped.replace(
-						/&lt;([@#$])([\w.\-:/]+)(?:\|([^&]*?))?&gt;/g,
-						(_, ch, id, label) => {
-							const display = label?.length ? label : id;
-							return `<span class="mention" data-type="mention" data-id="${id}" data-label="${display}" data-mention-suggestion-char="${ch}">${ch}${display}</span>`;
+						/&lt;([@#$])([\w.\-:/]+)(?:\|([^&]*?))?&gt;|&lt;\/([\w.\-:/]+)\|([^&]*?)&gt;/g,
+						(_, ch, id, label, slashSkillId, slashSkillLabel) => {
+							const mentionChar = ch || '$';
+							const mentionId = id || slashSkillId;
+							const display = (label || slashSkillLabel)?.length
+								? label || slashSkillLabel
+								: mentionId;
+							return `<span class="mention" data-type="mention" data-id="${mentionId}" data-label="${display}" data-mention-suggestion-char="${mentionChar}">${mentionChar}${display}</span>`;
 						}
 					);
 					return `<p>${withMentions}</p>`;
@@ -542,7 +588,7 @@
 		}
 	};
 
-	export const focus = () => {
+	export const focus = (options: FocusOptions = {}) => {
 		if (editor && editor.view) {
 			// Check if the editor is destroyed
 			if (editor.isDestroyed) {
@@ -550,9 +596,13 @@
 			}
 
 			try {
-				editor.view.focus();
-				// Scroll to the current selection
-				editor.view.dispatch(editor.view.state.tr.scrollIntoView());
+				if (options.preventScroll && editor.view.dom instanceof HTMLElement) {
+					editor.view.dom.focus(options);
+				} else {
+					editor.view.focus();
+					// Scroll to the current selection
+					editor.view.dispatch(editor.view.state.tr.scrollIntoView());
+				}
 			} catch (e) {
 				// sometimes focusing throws an error, ignore
 				console.warn('Error focusing editor', e);
@@ -715,7 +765,7 @@
 			}
 		}
 
-		if (collaboration && documentId && socket && user) {
+		if (collaboration && editable && documentId && socket && user) {
 			const { SocketIOCollaborationProvider } = await import('./RichTextInput/Collaboration');
 			provider = new SocketIOCollaborationProvider(documentId, socket, user, content);
 		}
@@ -725,6 +775,18 @@
 				StarterKit.configure({
 					link: link,
 					code: false, // Disabled in favor of FixedCode (see workaround above)
+					...(messageInput ? { italic: false } : {}),
+					// When rich text is on, ListKit + CodeBlockLowlight provide these.
+					// Disable StarterKit's equivalents to avoid duplicate extension names.
+					...(richText
+						? {
+								codeBlock: false,
+								bulletList: false,
+								orderedList: false,
+								listItem: false,
+								listKeymap: false
+							}
+						: {}),
 					// When rich text is off, disable Strike from StarterKit so we can
 					// re-add it below without its Mod-Shift-s shortcut (which conflicts
 					// with the Toggle Sidebar shortcut). When rich text is on, the user
@@ -732,6 +794,7 @@
 					...(richText ? {} : { strike: false })
 				}),
 				FixedCode,
+				...(messageInput ? [PromptItalic] : []),
 				...(dragHandle ? [ListItemDragHandle] : []),
 				Placeholder.configure({ placeholder: () => _placeholder, showOnlyWhenEditable: false }),
 				SelectionDecoration,
@@ -756,6 +819,12 @@
 					? [
 							Mention.configure({
 								HTMLAttributes: { class: 'mention' },
+								renderText: getMentionText,
+								renderHTML: ({ options, node, suggestion }) => [
+									'span',
+									options.HTMLAttributes,
+									getMentionText({ node, suggestion })
+								],
 								suggestions: suggestions
 							})
 						]
@@ -840,12 +909,21 @@
 					: []),
 				...(collaboration && provider ? [provider.getEditorExtension()] : [])
 			],
-			content: collaboration ? undefined : content,
+			content: provider ? undefined : content,
 			autofocus: messageInput ? true : false,
 			onTransaction: () => {
-				// force re-render so `editor.isActive` works as expected
-				editor = editor;
 				if (!editor) return;
+
+				// Defer Svelte reactivity trigger to rAF so we don't interleave
+				// DOM reads/writes with ProseMirror's updateStateInner.
+				if (!pendingUpdate) {
+					pendingUpdate = requestAnimationFrame(() => {
+						pendingUpdate = null;
+						if (editor && !editor.isDestroyed) {
+							editor = editor;
+						}
+					});
+				}
 
 				htmlValue = editor.getHTML();
 				jsonValue = editor.getJSON();
@@ -903,7 +981,9 @@
 				}
 			},
 			editorProps: {
-				attributes: { id },
+				// the tiptap placeholder never becomes the field's accessible name;
+				// function form so a placeholder change is picked up after mount
+				attributes: () => ({ id, 'aria-label': _placeholder }),
 				handleDrop: (view, event) => {
 					// Intercept sidebar chat item drops to prevent ProseMirror
 					// from inserting the raw JSON as text. The actual handling
@@ -1211,6 +1291,10 @@
 	});
 
 	onDestroy(() => {
+		if (pendingUpdate) {
+			cancelAnimationFrame(pendingUpdate);
+		}
+
 		if (provider) {
 			provider.destroy();
 		}
@@ -1246,7 +1330,7 @@
 		}
 
 		if (json) {
-			if (JSON.stringify(value) !== JSON.stringify(jsonValue)) {
+			if (!equal(value, jsonValue)) {
 				editor.commands.setContent(value);
 				selectTemplate();
 			}
