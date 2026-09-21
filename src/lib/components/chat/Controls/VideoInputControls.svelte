@@ -11,6 +11,9 @@
 		maxFramesRange,
 		resolveVideoInputSettings,
 		tokensPerFrameCap,
+		SAMPLING_FPS_MAX,
+		SAMPLING_FPS_MIN,
+		SAMPLING_FPS_STEP,
 		TOKENS_PER_FRAME_FLOOR,
 		TOKENS_PER_FRAME_STEP,
 		type VideoInputInfo,
@@ -128,6 +131,36 @@
 									step={frameStep}
 									value={value.maxFrames}
 									on:change={(e) => update(model.id, info, { maxFrames: numberOf(e) })}
+								/>
+							</div>
+						</div>
+					</div>
+
+					<div class="py-0.5 w-full">
+						<div class="text-xs">{$i18n.t('Sampling FPS')}</div>
+						<div class="flex mt-0.5 space-x-2">
+							<div class="flex-1">
+								<input
+									type="range"
+									aria-label={$i18n.t('Sampling FPS')}
+									min={SAMPLING_FPS_MIN}
+									max={SAMPLING_FPS_MAX}
+									step={SAMPLING_FPS_STEP}
+									value={value.fps}
+									on:input={(e) => update(model.id, info, { fps: numberOf(e) })}
+									class="w-full h-2 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+								/>
+							</div>
+							<div>
+								<input
+									type="number"
+									aria-label={$i18n.t('Sampling FPS')}
+									class="bg-transparent text-center w-14"
+									min={SAMPLING_FPS_MIN}
+									max={SAMPLING_FPS_MAX}
+									step={SAMPLING_FPS_STEP}
+									value={value.fps}
+									on:change={(e) => update(model.id, info, { fps: numberOf(e) })}
 								/>
 							</div>
 						</div>

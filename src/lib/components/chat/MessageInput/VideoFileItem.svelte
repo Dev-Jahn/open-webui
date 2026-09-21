@@ -16,7 +16,9 @@
 
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
+	import Play from '$lib/components/icons/Play.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
+	import VideoFramesPlayer from './VideoFramesPlayer.svelte';
 
 	const i18n = getContext<Writable<i18nType>>('i18n');
 	const dispatch = createEventDispatcher();
@@ -30,6 +32,9 @@
 
 	let frames: VideoFramesRef | null = null;
 	$: frames = file?.video_frames ?? null;
+
+	/** Flipbook of the sampled frames (what the model saw), opened from the poster. */
+	let showPlayer = false;
 
 	$: uploading = file?.status === 'uploading';
 	$: posterUrl = frames ? videoFrameUrl(frames.id, 0) : null;
@@ -77,24 +82,32 @@
 
 {#if large}
 	{#if frames}
-		<div class="relative inline-block">
-			<img src={posterUrl} alt={file?.name ?? ''} class="max-h-96 rounded-lg" />
+		<div class="group relative inline-block">
+			<button
+				type="button"
+				aria-label={$i18n.t('Play sampled frames')}
+				class="block cursor-pointer"
+				on:click={() => (showPlayer = true)}
+			>
+				<img src={posterUrl} alt={file?.name ?? ''} class="max-h-96 rounded-lg" />
+				<div
+					class="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100"
+				>
+					<div class="rounded-full bg-black/60 p-3 text-white">
+						<Play className="size-6" strokeWidth="2" />
+					</div>
+				</div>
+			</button>
 			<div
-				class="absolute bottom-1.5 left-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-xs text-white"
+				class="pointer-events-none absolute bottom-1.5 left-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-xs text-white"
 			>
 				{$i18n.t('{{count}} frames', { count: frames.num_frames })} · {frames.fps.toFixed(1)} fps
 			</div>
 		</div>
 	{:else if videoUrl}
 		<!-- svelte-ignore a11y-media-has-caption -->
-		<video
-			src={videoUrl}
-			class="max-h-96 rounded-lg"
-			controls
-			muted
-			playsinline
-			preload="metadata"
-		/>
+		<video src={videoUrl} class="max-h-96 rounded-lg" controls muted playsinline preload="metadata"
+		></video>
 	{/if}
 {:else}
 	<div
@@ -106,10 +119,18 @@
 			{#if uploading}
 				<Spinner className="size-4" />
 			{:else if posterUrl}
-				<img src={posterUrl} alt="" class="size-full object-cover" />
+				<button
+					type="button"
+					aria-label={$i18n.t('Play sampled frames')}
+					class="size-full cursor-pointer"
+					on:click={() => (showPlayer = true)}
+				>
+					<img src={posterUrl} alt="" class="size-full object-cover" />
+				</button>
 			{:else if videoUrl}
 				<!-- svelte-ignore a11y-media-has-caption -->
-				<video src={videoUrl} class="size-full object-cover" muted playsinline preload="metadata" />
+				<video src={videoUrl} class="size-full object-cover" muted playsinline preload="metadata"
+				></video>
 			{/if}
 
 			{#if unsupportedModels.length > 0}
@@ -159,4 +180,8 @@
 			</div>
 		{/if}
 	</div>
+{/if}
+
+{#if frames}
+	<VideoFramesPlayer bind:show={showPlayer} {frames} name={file?.name ?? ''} />
 {/if}

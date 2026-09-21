@@ -39,6 +39,26 @@ describe('planVideo', () => {
 		expect(plan.fps).toBeCloseTo(2.0);
 	});
 
+	it('scales the frame count with the Sampling FPS setting', () => {
+		const plan = (fps: number, maxFrames = 32) =>
+			planVideo(
+				{ duration: 4, width: 640, height: 352 },
+				info,
+				resolveVideoInputSettings(info, { maxFrames, fps, tokensPerFrame: 768 })
+			);
+
+		expect(plan(4).n).toBe(16);
+		expect(plan(4).fps).toBeCloseTo(4.0);
+
+		// floor(4 s × 0.5) = 2 → min_frames 4 → still 4 after temporal-patch rounding
+		expect(plan(0.5).n).toBe(4);
+		expect(plan(0.5).fps).toBeCloseTo(1.0);
+
+		// Max Frames still caps: 4 s × 8 fps = 32 → 8
+		expect(plan(8, 8).n).toBe(8);
+		expect(plan(8, 8).fps).toBeCloseTo(2.0);
+	});
+
 	it('clamps to the max-frames slider and keeps n a multiple of the temporal patch', () => {
 		const plan = planVideo(
 			{ duration: 60, width: 640, height: 352 },
@@ -129,12 +149,22 @@ describe('helpers', () => {
 		expect(seedVideoInputSettings(info)).toEqual({
 			mode: 'frames',
 			maxFrames: 32,
+			fps: 2,
 			tokensPerFrame: 768
 		});
-		expect(resolveVideoInputSettings(info, { maxFrames: 5000, tokensPerFrame: 7 })).toEqual({
+		expect(
+			resolveVideoInputSettings(info, { maxFrames: 5000, fps: 100, tokensPerFrame: 7 })
+		).toEqual({
 			mode: 'frames',
 			maxFrames: 768,
+			fps: 8,
 			tokensPerFrame: 64
 		});
+	});
+
+	it('keeps settings stored before the Sampling FPS slider existed (fps → model default)', () => {
+		const resolved = resolveVideoInputSettings(info, { maxFrames: 16, tokensPerFrame: 256 });
+		expect(resolved).toEqual({ mode: 'frames', maxFrames: 16, fps: 2, tokensPerFrame: 256 });
+		expect(resolveVideoInputSettings(info, { fps: 0.3 }).fps).toBe(0.25);
 	});
 });

@@ -34,6 +34,8 @@ export type VideoInputMode = 'frames' | 'file';
 export type VideoInputSettings = {
 	mode: VideoInputMode;
 	maxFrames: number;
+	/** Frames sampled per second of video, before the min/max-frames clamps. */
+	fps: number;
 	tokensPerFrame: number;
 };
 
@@ -58,6 +60,10 @@ export type VideoFramesRef = {
 };
 
 export const DEFAULT_MAX_FRAMES = 32;
+export const DEFAULT_SAMPLING_FPS = 2.0; // Qwen-VL video default, also what the server advertises
+export const SAMPLING_FPS_MIN = 0.25;
+export const SAMPLING_FPS_MAX = 8;
+export const SAMPLING_FPS_STEP = 0.25;
 export const DEFAULT_TOKENS_PER_FRAME = 768; // Qwen-VL video default: 768 × size_factor² pixels
 export const TOKENS_PER_FRAME_STEP = 64;
 export const TOKENS_PER_FRAME_FLOOR = 64;
@@ -131,10 +137,14 @@ const clampTokensPerFrame = (value: number, info: VideoInputInfo): number => {
 	return clamp(snapped, TOKENS_PER_FRAME_FLOOR, tokensPerFrameCap(info));
 };
 
+const clampSamplingFps = (value: number): number =>
+	clamp(roundToStep(value, SAMPLING_FPS_STEP), SAMPLING_FPS_MIN, SAMPLING_FPS_MAX);
+
 /** Default settings for a model, derived from its advertised limits. */
 export const seedVideoInputSettings = (info: VideoInputInfo): VideoInputSettings => ({
 	mode: 'frames',
 	maxFrames: clampMaxFrames(DEFAULT_MAX_FRAMES, info),
+	fps: clampSamplingFps(info.sampling?.fps ?? DEFAULT_SAMPLING_FPS),
 	tokensPerFrame: clampTokensPerFrame(DEFAULT_TOKENS_PER_FRAME, info)
 });
 
@@ -147,6 +157,7 @@ export const resolveVideoInputSettings = (
 	return {
 		mode: stored?.mode === 'file' ? 'file' : 'frames',
 		maxFrames: clampMaxFrames(stored?.maxFrames ?? seed.maxFrames, info),
+		fps: clampSamplingFps(stored?.fps ?? seed.fps),
 		tokensPerFrame: clampTokensPerFrame(stored?.tokensPerFrame ?? seed.tokensPerFrame, info)
 	};
 };
@@ -187,15 +198,19 @@ export const smartResize = (
 	return { height: h, width: w };
 };
 
-/** Number of frames the server will expect for a clip of `duration` seconds. */
+/**
+ * Number of frames to sample from a clip of `duration` seconds at `fps` frames per second,
+ * clamped to [min_frames, maxFrames] and rounded down to the temporal patch multiple.
+ */
 export const planFrameCount = (
 	duration: number,
 	sampling: VideoSampling,
 	maxFrames: number,
-	temporalPatchSize: number
+	temporalPatchSize: number,
+	fps: number
 ): number => {
 	const T = Math.max(1, temporalPatchSize);
-	let n = clamp(Math.floor(duration * sampling.fps), sampling.min_frames, maxFrames);
+	let n = clamp(Math.floor(duration * fps), sampling.min_frames, maxFrames);
 	n = Math.max(T, n - (n % T));
 	return n;
 };
@@ -220,7 +235,7 @@ export const planVideo = (
 	const F = pixels.size_factor;
 	const T = pixels.temporal_patch_size;
 
-	const n = planFrameCount(meta.duration, sampling, settings.maxFrames, T);
+	const n = planFrameCount(meta.duration, sampling, settings.maxFrames, T, settings.fps);
 	const { height, width } = smartResize(meta.height, meta.width, {
 		factor: F,
 		maxPixels: settings.tokensPerFrame * F * F,
