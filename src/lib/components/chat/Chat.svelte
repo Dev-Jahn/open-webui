@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
+	import { warnIfVideoUnsupported } from './MessageInput/videoFiles';
 
 	import { getContext, onDestroy, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -3325,6 +3326,7 @@
 						})
 					);
 				}
+				warnIfVideoUnsupported(model, $models, createMessagesList(_history, parentId));
 			}
 		}
 

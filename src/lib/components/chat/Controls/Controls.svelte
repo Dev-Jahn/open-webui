@@ -6,11 +6,13 @@
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import AdvancedParams from '../Settings/Advanced/AdvancedParams.svelte';
 	import Valves from '$lib/components/chat/Controls/Valves.svelte';
+	import VideoInputControls from '$lib/components/chat/Controls/VideoInputControls.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
 	import { user, settings } from '$lib/stores';
-	export let models = [];
+	import { supportsVideoInput } from '$lib/utils/video';
+	export let models: any[] = [];
 	export let chatFiles = [];
 	export let params = {};
 	export let embed = false;
@@ -126,6 +128,10 @@
 						/>
 					</div>
 				</Collapsible>
+			{/if}
+
+			{#if models.some((model) => supportsVideoInput(model, models))}
+				<VideoInputControls {models} buttonClassName={compactSectionButtonClass} />
 			{/if}
 
 			{#if $user?.role === 'admin' || ($user?.permissions.chat?.params ?? true)}
