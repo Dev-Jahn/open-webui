@@ -139,6 +139,7 @@ from open_webui.utils.tools import (
     get_tools,
     get_updated_tool_function,
 )
+from open_webui.utils.video import inject_video_parts
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
@@ -2428,6 +2429,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             system_message = get_system_message(form_data.get('messages', []))
             form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
 
+            form_data = inject_video_parts(form_data, model, user)
             # Inject image files into content as image_url parts (mirrors frontend logic)
             for message in form_data['messages']:
                 image_files = [

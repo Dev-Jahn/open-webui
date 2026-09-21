@@ -18,6 +18,7 @@
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Markdown from './Markdown.svelte';
 	import Image from '$lib/components/common/Image.svelte';
+	import VideoFileItem from '$lib/components/chat/MessageInput/VideoFileItem.svelte';
 	import DeleteConfirmDialog from '$lib/components/common/ConfirmDialog.svelte';
 	import SubagentResultRow from './SubagentResultRow.svelte';
 
@@ -50,7 +51,7 @@
 
 	let edit = false;
 	let editedContent = '';
-	let editedFiles = [];
+	let editedFiles: any[] = [];
 
 	let messageEditTextAreaElement: HTMLTextAreaElement;
 	let editScrollContainer: HTMLDivElement;
@@ -185,6 +186,8 @@
 							<div class={($settings?.chatBubble ?? true) ? 'self-end' : ''}>
 								{#if file.type === 'image' || (file?.content_type ?? '').startsWith('image/')}
 									<Image src={fileUrl} imageClassName=" max-h-96 rounded-lg" />
+								{:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+									<VideoFileItem {file} large />
 								{:else}
 									<FileItem
 										item={file}
@@ -251,6 +254,15 @@
 											</button>
 										</div>
 									</div>
+								{:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+									<VideoFileItem
+										{file}
+										dismissible
+										on:dismiss={() => {
+											editedFiles.splice(fileIdx, 1);
+											editedFiles = editedFiles;
+										}}
+									/>
 								{:else}
 									<FileItem
 										item={file}

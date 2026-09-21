@@ -74,6 +74,8 @@
 
 	import InputMenu from './MessageInput/InputMenu.svelte';
 	import VoiceRecording from './MessageInput/VoiceRecording.svelte';
+	import VideoFileItem from './MessageInput/VideoFileItem.svelte';
+	import { addVideoFile, forgetVideoFile, resyncVideoFiles } from './MessageInput/videoFiles';
 	import ModelSelector from './ModelSelector.svelte';
 
 	import ToolServersModal from './ToolServersModal.svelte';
@@ -1063,6 +1065,20 @@
 		}
 	};
 
+	// Video attachments (frames are extracted client-side): see ./MessageInput/videoFiles.ts
+	const videoFilesContext = () => ({
+		getFiles: () => files,
+		setFiles: (f: any[]) => (files = f),
+		onUpdate: (file: any) => onUpdate({ file }),
+		models: $models,
+		selectedModelIds,
+		videoSettings: $settings?.videoInput,
+		temporaryChat: $temporaryChatEnabled,
+		token: localStorage.token,
+		uploadOriginal: (f: File) => uploadFileHandler(f, false, { type: 'video' })
+	});
+	$: if (files && selectedModelIds && $models && $settings) resyncVideoFiles(videoFilesContext());
+
 	const inputFilesHandler = async (inputFiles) => {
 		console.log('Input files handler called with:', inputFiles);
 
@@ -1169,6 +1185,8 @@
 				};
 
 				reader.readAsDataURL(file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file);
+			} else if (file['type'].startsWith('video/')) {
+				await addVideoFile(file, videoFilesContext());
 			} else {
 				uploadFileHandler(file);
 			}
@@ -1961,6 +1979,17 @@
 													</button>
 												</div>
 											</div>
+										{:else if file.type === 'video' || (file?.content_type ?? '').startsWith('video/')}
+											<VideoFileItem
+												{file}
+												{selectedModelIds}
+												dismissible
+												on:dismiss={() => {
+													forgetVideoFile(file, localStorage.token);
+													files.splice(fileIdx, 1);
+													files = files;
+												}}
+											/>
 										{:else}
 											<FileItem
 												item={file}
