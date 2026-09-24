@@ -14,17 +14,22 @@ export type VideoFramesMeta = {
 const errorMessage = (err: any): string =>
 	err?.detail ?? err?.message ?? (typeof err === 'string' ? err : 'Request failed');
 
-/** Uploads an ordered set of JPEG frames as one bundle → POST /api/v1/video/frames. */
+/**
+ * Uploads an ordered set of JPEG frames as one bundle → POST /api/v1/video/frames, with each
+ * frame's presentation time in seconds (`timestamps`, one per frame, sent unrounded).
+ */
 export const uploadVideoFrames = async (
 	token: string,
 	frames: Blob[],
-	meta: VideoFramesMeta
+	meta: VideoFramesMeta,
+	timestamps: number[]
 ): Promise<VideoFramesRef> => {
 	const data = new FormData();
 	frames.forEach((blob, index) => {
 		data.append('frames', blob, `${String(index).padStart(4, '0')}.jpg`);
 	});
 	data.append('meta', JSON.stringify(meta));
+	data.append('timestamps', JSON.stringify(timestamps));
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/video/frames`, {
 		method: 'POST',

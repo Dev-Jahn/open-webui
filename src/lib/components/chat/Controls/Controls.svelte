@@ -11,7 +11,6 @@
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
 	import { user, settings } from '$lib/stores';
-	import { supportsVideoInput } from '$lib/utils/video';
 	export let models: any[] = [];
 	export let chatFiles = [];
 	export let params = {};
@@ -130,9 +129,7 @@
 				</Collapsible>
 			{/if}
 
-			{#if models.some((model) => supportsVideoInput(model, models))}
-				<VideoInputControls {models} buttonClassName={compactSectionButtonClass} />
-			{/if}
+			<VideoInputControls {models} buttonClassName={compactSectionButtonClass} />
 
 			{#if $user?.role === 'admin' || ($user?.permissions.chat?.params ?? true)}
 				<Collapsible
