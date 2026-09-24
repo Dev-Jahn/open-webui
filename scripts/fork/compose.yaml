@@ -1,0 +1,29 @@
+# The permanent Open WebUI service, built from this fork by scripts/fork/docker-build.sh.
+# Run from the repo root: docker compose -f scripts/fork/compose.yaml up -d   (see README.md here)
+name: open-webui-fork
+
+services:
+  open-webui:
+    image: open-webui-fork:local
+    pull_policy: never # built locally, never on a registry
+    container_name: open-webui-fork
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ${HOME}/.local/share/open-webui-fork:/app/backend/data
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment:
+      ENABLE_OLLAMA_API: "false"
+      # mlx-vlm runs natively on the Mac (--port 8199). These two only seed the database on the
+      # first start; change the connection later in Admin > Settings > Connections.
+      OPENAI_API_BASE_URL: http://host.docker.internal:8199/v1
+      OPENAI_API_KEY: not-needed
+      # mlx-vlm reads video frames from disk by HOST path: the uploads dir as the Mac sees it.
+      VIDEO_FRAMES_TRANSPORT: path
+      VIDEO_SHARED_PATH: ${HOME}/.local/share/open-webui-fork/uploads
+      # Keep the generated session secret in the data dir, so logins survive re-creating the container.
+      WEBUI_SECRET_KEY_FILE: /app/backend/data/.webui_secret_key
+      # Title / tag / follow-up calls: short and without thinking. Seeds the database on the first start only.
+      TASK_MODEL_PARAMS: '{"max_tokens":256,"enable_thinking":false}'
