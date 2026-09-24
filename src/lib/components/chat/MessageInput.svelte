@@ -1073,6 +1073,7 @@
 		models: $models,
 		selectedModelIds,
 		videoSettings: $settings?.videoInput,
+		history,
 		temporaryChat: $temporaryChatEnabled,
 		token: localStorage.token,
 		uploadOriginal: (f: File) => uploadFileHandler(f, false, { type: 'video' })

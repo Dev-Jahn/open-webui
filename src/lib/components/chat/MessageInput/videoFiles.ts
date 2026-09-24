@@ -8,6 +8,7 @@ import { get } from 'svelte/store';
 import { v4 as uuidv4 } from 'uuid';
 
 import i18n from '$lib/i18n';
+import { createMessagesList } from '$lib/utils';
 import { deleteVideoFrames, uploadVideoFrames } from '$lib/apis/video';
 import {
 	getVideoInputInfo,
@@ -15,7 +16,10 @@ import {
 	planVideo,
 	probeVideo,
 	resolveVideoInputSettings,
+	selectDistinctFrames,
+	videoFileMode,
 	type VideoInputInfo,
+	type VideoInputMode,
 	type VideoInputSettings,
 	type VideoMeta,
 	type VideoPlan
@@ -29,6 +33,8 @@ export type VideoFilesContext = {
 	models: unknown[];
 	selectedModelIds: string[];
 	videoSettings: Record<string, Partial<VideoInputSettings>> | undefined;
+	/** The chat's message tree: the next message continues the branch ending at `currentId`. */
+	history: { currentId: string | null; messages: Record<string, any> };
 	temporaryChat: boolean;
 	token: string;
 	/** "Original file" mode: upload the video as a regular file (process=false) with type 'video'. */
@@ -41,7 +47,8 @@ type Entry = {
 	file: File;
 	meta: VideoMeta;
 	controller: AbortController | null;
-	pending: VideoPlan | null;
+	/** Plan of the extraction in flight or of the uploaded bundle (which may hold fewer frames). */
+	plan: VideoPlan | null;
 };
 
 const RESYNC_DELAY_MS = 400;
@@ -91,11 +98,8 @@ const fail = (item: any, e: unknown, ctx: VideoFilesContext) => {
 	ctx.onUpdate(item);
 };
 
-const isPlanned = (
-	plan: VideoPlan,
-	ref: { num_frames: number; width: number; height: number } | null | undefined
-): boolean =>
-	!!ref && ref.num_frames === plan.n && ref.width === plan.width && ref.height === plan.height;
+const samePlan = (a: VideoPlan, b: VideoPlan | null): boolean =>
+	!!b && a.n === b.n && a.width === b.width && a.height === b.height;
 
 const runExtraction = async (item: any, plan: VideoPlan, ctx: VideoFilesContext) => {
 	const entry = entries.get(item.itemId);
@@ -104,33 +108,40 @@ const runExtraction = async (item: any, plan: VideoPlan, ctx: VideoFilesContext)
 	entry.controller?.abort();
 	const controller = new AbortController();
 	entry.controller = controller;
-	entry.pending = plan;
+	entry.plan = plan;
 
 	item.status = 'uploading';
 	item.progress = { done: 0, total: plan.n, uploading: false };
 	touch(ctx);
 
 	try {
-		const frames = await extractFrames(entry.file, plan, {
+		const captured = await extractFrames(entry.file, plan, {
 			signal: controller.signal,
 			onProgress: (done, total) => {
 				item.progress = { done, total, uploading: false };
 				touch(ctx);
 			}
 		});
+		// The real frames decide the count (and so the rate the server is told).
+		const kept = selectDistinctFrames(captured.times, plan.temporalPatchSize, plan.minFrames);
 
 		item.progress = { done: plan.n, total: plan.n, uploading: true };
 		touch(ctx);
 
-		const bundle = await uploadVideoFrames(ctx.token, frames, {
-			fps: plan.fps,
-			duration: entry.meta.duration,
-			width: plan.width,
-			height: plan.height,
-			num_frames: plan.n,
-			name: entry.file.name,
-			content_type: entry.file.type
-		});
+		const bundle = await uploadVideoFrames(
+			ctx.token,
+			kept.map((i) => captured.frames[i]),
+			{
+				fps: kept.length / entry.meta.duration,
+				duration: entry.meta.duration,
+				width: plan.width,
+				height: plan.height,
+				num_frames: kept.length,
+				name: entry.file.name,
+				content_type: entry.file.type
+			},
+			kept.map((i) => captured.times[i])
+		);
 
 		if (controller.signal.aborted) {
 			await discardBundle(ctx.token, bundle.id);
@@ -144,7 +155,6 @@ const runExtraction = async (item: any, plan: VideoPlan, ctx: VideoFilesContext)
 		item.error = '';
 		delete item.progress;
 		entry.controller = null;
-		entry.pending = null;
 
 		touch(ctx);
 		ctx.onUpdate(item);
@@ -159,9 +169,49 @@ const runExtraction = async (item: any, plan: VideoPlan, ctx: VideoFilesContext)
 	} catch (e) {
 		if (controller.signal.aborted) return; // superseded by a newer plan or dismissed
 		entry.controller = null;
-		entry.pending = null;
 		fail(item, e, ctx);
 	}
+};
+
+const modeLabel = (mode: VideoInputMode): string =>
+	mode === 'frames' ? t('Sampled frames') : t('Original file');
+
+/** The backend's VIDEO_URL_RE (utils/video.py): a video URL typed in user text, sent as a whole video. */
+const VIDEO_URL_RE = /(?<!\S)(?:https?:\/\/|file:\/\/)\S+\.(?:mp4|webm|mov|mkv|avi)(?!\S)/i;
+
+/**
+ * Modes of the videos the next request carries: those of the current branch, which the backend
+ * replays (attached videos, and typed video URLs as 'file'), and the input's pending files.
+ */
+const chatVideoModes = (ctx: VideoFilesContext): Set<VideoInputMode> => {
+	const branch: { role?: string; content?: unknown; files?: unknown[] }[] = createMessagesList(
+		ctx.history,
+		ctx.history.currentId
+	);
+	const files = [...branch.flatMap((message) => message.files ?? []), ...ctx.getFiles()];
+	const modes = files.map(videoFileMode);
+	if (branch.some((m) => m.role === 'user' && VIDEO_URL_RE.test(String(m.content ?? '')))) {
+		modes.push('file');
+	}
+	return new Set(modes.filter((mode): mode is VideoInputMode => mode !== null));
+};
+
+/**
+ * One request carries one video pixel budget (`video_pixels`), sized for the frame bundles, so an
+ * original-file video next to a bundle would be decoded at the bundle's budget. A chat therefore
+ * keeps to one mode; true when `mode` may be added.
+ */
+const acceptsVideoMode = (mode: VideoInputMode, ctx: VideoFilesContext): boolean => {
+	const other: VideoInputMode = mode === 'frames' ? 'file' : 'frames';
+	if (!chatVideoModes(ctx).has(other)) return true;
+
+	toast.error(
+		t(
+			'This chat already has a video sent as "{{existing}}", and one chat cannot mix "{{existing}}" and "{{requested}}". Change "Send video as" in Controls or start a new chat.',
+			{ existing: modeLabel(other), requested: modeLabel(mode) }
+		)
+	);
+	return false;
 };
 
 /** Handles a dropped/picked video file; rejects loudly when video input is not possible. */
@@ -175,6 +225,8 @@ export const addVideoFile = async (file: File, ctx: VideoFilesContext): Promise<
 		toast.error(t('Selected model(s) do not support video inputs'));
 		return;
 	}
+	if (!acceptsVideoMode(target.settings.mode, ctx)) return;
+
 	if (target.settings.mode === 'file') {
 		await ctx.uploadOriginal(file);
 		return;
@@ -189,6 +241,7 @@ export const addVideoFile = async (file: File, ctx: VideoFilesContext): Promise<
 		error: '',
 		id: null,
 		itemId: uuidv4(),
+		video_frames: null, // marks the frames mode from the start (see videoFileMode)
 		progress: { done: 0, total: 0, uploading: false }
 	};
 	ctx.setFiles([...ctx.getFiles(), item]);
@@ -203,7 +256,7 @@ export const addVideoFile = async (file: File, ctx: VideoFilesContext): Promise<
 		return;
 	}
 
-	entries.set(item.itemId, { file, meta, controller: null, pending: null });
+	entries.set(item.itemId, { file, meta, controller: null, plan: null });
 	await runExtraction(item, plan, ctx);
 };
 
@@ -256,11 +309,7 @@ const resync = (ctx: VideoFilesContext) => {
 			fail(item, e, ctx);
 			continue;
 		}
-
-		const current = entry.pending
-			? { num_frames: entry.pending.n, width: entry.pending.width, height: entry.pending.height }
-			: item.video_frames;
-		if (isPlanned(plan, current)) continue;
+		if (samePlan(plan, entry.plan)) continue;
 
 		void runExtraction(item, plan, ctx);
 	}

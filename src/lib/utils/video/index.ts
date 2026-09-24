@@ -9,6 +9,8 @@ export type VideoSampling = {
 	min_frames: number;
 	max_frames: number;
 	frame_factor: number;
+	/** The model writes its per-group time markers from `video_frames.timestamps` (mlx-vlm d10909a3+). */
+	timestamps?: boolean;
 };
 
 export type VideoPixels = {
@@ -42,11 +44,11 @@ export type VideoInputSettings = {
 export type VideoMeta = { duration: number; width: number; height: number };
 
 export type VideoPlan = {
-	n: number; // frames to sample (uniformly)
-	fps: number; // effective sampling rate = n / duration (what the server is told)
+	n: number; // frames to sample, evenly spaced from the first frame to the last
 	width: number; // frame size after smart resize
 	height: number;
-	tokens: number; // approximate visual tokens for the whole clip
+	temporalPatchSize: number; // frames per temporal group: the frame count stays a multiple of it
+	minFrames: number; // fewest frames the model accepts
 };
 
 /** Shape of a persisted frames-mode bundle reference on a message file item. */
@@ -57,6 +59,8 @@ export type VideoFramesRef = {
 	height: number;
 	fps: number;
 	duration: number;
+	/** Each frame's presentation time (s); absent on bundles sampled at slot centres (older fork). */
+	timestamps?: number[];
 };
 
 export const DEFAULT_MAX_FRAMES = 32;
@@ -95,14 +99,19 @@ export const getVideoInputInfo = (
 	return null;
 };
 
-export const supportsVideoInput = (model: unknown, models: unknown[] = []): boolean =>
-	getVideoInputInfo(model, models)?.supported === true;
-
 /** A message file item that carries a video (frames mode or original-file mode). */
 export const isVideoFile = (file: unknown): boolean => {
 	const f = file as Record<string, any> | null | undefined;
 	return f?.type === 'video' || String(f?.content_type ?? '').startsWith('video/');
 };
+
+/**
+ * How a video item goes to the model: 'frames' when it carries a `video_frames` key (set from the
+ * moment a frames item is created, as the backend tells the two apart the same way), else 'file'.
+ * Null for anything that is not a video.
+ */
+export const videoFileMode = (file: unknown): VideoInputMode | null =>
+	isVideoFile(file) ? ('video_frames' in (file as object) ? 'frames' : 'file') : null;
 
 const sizeFactor = (info: VideoInputInfo): number => info.pixels?.size_factor ?? 32;
 
@@ -242,26 +251,100 @@ export const planVideo = (
 		minPixels: pixels.min_pixels
 	});
 
-	const tokens = estimateVideoTokens({ num_frames: n, width, height }, info);
-
-	return { n, fps: n / meta.duration, width, height, tokens };
+	return { n, width, height, temporalPatchSize: T, minFrames: sampling.min_frames };
 };
 
-/** Approximate visual tokens for a frame bundle: g·G + 8·G (g = merged patches per frame, G = temporal groups). */
+/**
+ * Sample positions (seconds) of the Qwen standard: `n` times evenly spaced from the first frame (0)
+ * to the last one (`lastFrameTime`), t_i = i · lastFrameTime / (n − 1).
+ */
+export const frameTargets = (lastFrameTime: number, n: number): number[] =>
+	n === 1 ? [0] : Array.from({ length: n }, (_, i) => (i * lastFrameTime) / (n - 1));
+
+/** Sample times of bundles extracted before real frame times were captured: t_i = (i + 0.5) · duration / n. */
+export const slotCentreTimes = (duration: number, n: number): number[] =>
+	Array.from({ length: n }, (_, i) => ((i + 0.5) * duration) / n);
+
+/** Each frame's time: the captured timestamps, or slot centres for older bundles. */
+export const bundleFrameTimes = (bundle: Omit<VideoFramesRef, 'id'>): number[] =>
+	bundle.timestamps ?? slotCentreTimes(bundle.duration, bundle.num_frames);
+
+/**
+ * Indices of the captured frames to send. Targets that landed on the same source frame (equal
+ * presentation times, always adjacent) keep only the first; the rest is trimmed from the end to a
+ * multiple of the temporal patch size. Throws when fewer than `minFrames` remain.
+ */
+export const selectDistinctFrames = (
+	times: number[],
+	temporalPatchSize: number,
+	minFrames: number
+): number[] => {
+	const distinct = times.flatMap((t, i) => (i > 0 && t === times[i - 1] ? [] : [i]));
+	const T = Math.max(1, temporalPatchSize);
+	const kept = distinct.slice(0, distinct.length - (distinct.length % T));
+	const needed = Math.max(minFrames, T);
+	if (kept.length < needed) {
+		throw new Error(
+			`The video has only ${distinct.length} distinct frames at the sampled positions; the model needs at least ${needed}`
+		);
+	}
+	return kept;
+};
+
+/**
+ * Python's '{:.1f}', which the server uses for its "<t.t seconds>" markers: the exact binary value
+ * rounded half to even. toFixed rounds exact ties up instead; with one decimal the only exact ties
+ * are odd multiples of 0.25 (0.25 → "0.2", 0.75 → "0.8", 1.25 → "1.2").
+ */
+export const formatMarkerSeconds = (seconds: number): string => {
+	const quarters = seconds * 4;
+	if (Number.isInteger(quarters) && quarters % 2 === 1) {
+		const tenths = Math.floor(seconds * 10); // seconds · 10 is exactly tenths + 0.5
+		const even = tenths % 2 === 0 ? tenths : tenths + 1;
+		return `${Math.floor(even / 10)}.${even % 10}`;
+	}
+	return seconds.toFixed(1);
+};
+
+/** Mean time of each temporal group (first and last frame; a short last group reuses its last frame). */
+export const groupMarkerTimes = (times: number[], temporalPatchSize: number): number[] => {
+	const T = Math.max(1, temporalPatchSize);
+	return Array.from({ length: Math.ceil(times.length / T) }, (_, g) => {
+		const first = g * T;
+		const last = Math.min(first + T - 1, times.length - 1);
+		return (times[first] + times[last]) / 2;
+	});
+};
+
+/**
+ * Frame times the server builds its markers from: the frames' own times when the model reads
+ * `video_frames.timestamps` (the backend sends them only then), otherwise index / rate.
+ */
+const markerFrameTimes = (bundle: Omit<VideoFramesRef, 'id'>, info: VideoInputInfo): number[] =>
+	info.sampling?.timestamps === true
+		? bundleFrameTimes(bundle)
+		: Array.from({ length: bundle.num_frames }, (_, i) => i / bundle.fps);
+
+/** "<t.t seconds>" is '<', one token per integer digit, '.', the decimal, ' seconds' and '>'. */
+const markerTokens = (seconds: number): number =>
+	formatMarkerSeconds(seconds).split('.')[0].length + 5;
+
+/**
+ * Visual tokens of a frame bundle as the server prompts it: each temporal group costs g merged
+ * patches (g = h·w / size_factor²), its "<t.t seconds>" marker and vision start/end (2).
+ */
 export const estimateVideoTokens = (
-	bundle: { num_frames: number; width: number; height: number },
+	bundle: Omit<VideoFramesRef, 'id'>,
 	info: VideoInputInfo
 ): number => {
 	const F = info.pixels?.size_factor ?? 32;
 	const T = Math.max(1, info.pixels?.temporal_patch_size ?? 2);
 	const g = (bundle.height / F) * (bundle.width / F);
-	const G = Math.ceil(bundle.num_frames / T);
-	return g * G + G * 8;
+	return groupMarkerTimes(markerFrameTimes(bundle, info), T).reduce(
+		(sum, t) => sum + g + markerTokens(t) + 2,
+		0
+	);
 };
-
-/** Uniform sample times (seconds) for `n` frames over `duration`: t_i = (i + 0.5) · duration / n. */
-export const sampleTimes = (duration: number, n: number): number[] =>
-	Array.from({ length: n }, (_, i) => ((i + 0.5) * duration) / n);
 
 /**
  * `video_pixels.max_pixels` the request must carry so the server's own resize is a no-op:

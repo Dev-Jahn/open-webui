@@ -6,7 +6,7 @@
 	import type { i18n as i18nType } from 'i18next';
 
 	import { videoFrameUrl } from '$lib/apis/video';
-	import type { VideoFramesRef } from '$lib/utils/video';
+	import { bundleFrameTimes, type VideoFramesRef } from '$lib/utils/video';
 
 	import Modal from '$lib/components/common/Modal.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
@@ -30,10 +30,11 @@
 	$: count = frames.num_frames;
 	$: urls = Array.from({ length: count }, (_, i) => videoFrameUrl(frames.id, i));
 	$: ready = loaded[0] === true;
-	// Frames were sampled at the centre of each slot: t_i = (i + 0.5) / fps.
+	// Each frame's captured time; bundles from before real times were kept used slot centres.
+	$: times = bundleFrameTimes(frames);
 	$: caption = [
 		$i18n.t('frame {{current}} / {{total}}', { current: index + 1, total: count }),
-		`t = ${((index + 0.5) / frames.fps).toFixed(2)} s`,
+		`t = ${times[index].toFixed(2)} s`,
 		`${frames.width}×${frames.height}`,
 		`${frames.fps.toFixed(1)} fps`
 	].join(' · ');

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import shutil
 import time
@@ -24,6 +25,10 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# How far (seconds) a frame's time may pass the reported duration: the last frame's
+# presentation time can sit slightly beyond a container's rounded duration.
+TIMESTAMP_SLACK = 0.05
+
 
 ############################
 # Video frame bundles
@@ -48,6 +53,29 @@ class VideoFramesResponse(BaseModel):
     height: int
     fps: float
     duration: float
+    timestamps: list[float] | None = None
+
+
+def _invalid_timestamps(reason: str) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Invalid timestamps: {reason}')
+
+
+def _parse_timestamps(raw: str, num_frames: int, duration: float) -> list[float]:
+    """The optional `timestamps` form field: a JSON array with each frame's time in seconds."""
+    try:
+        values = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise _invalid_timestamps(f'not JSON: {e}')
+    if not isinstance(values, list) or any(isinstance(t, bool) or not isinstance(t, (int, float)) for t in values):
+        raise _invalid_timestamps('expected a JSON array of numbers')
+    if len(values) != num_frames:
+        raise _invalid_timestamps(f'{len(values)} values for {num_frames} frames')
+    # Chained comparisons also reject NaN and infinity.
+    if not all(0 <= t <= duration + TIMESTAMP_SLACK for t in values):
+        raise _invalid_timestamps(f'every value must be a finite number of seconds from 0 to the duration {duration}')
+    if any(later < earlier for earlier, later in zip(values, values[1:])):
+        raise _invalid_timestamps('values must be non-decreasing')
+    return [float(t) for t in values]
 
 
 def _check_frame(data: bytes, index: int, width: int, height: int) -> None:
@@ -82,10 +110,11 @@ def _get_owned_meta_or_404(id: str, user) -> dict:
     return meta
 
 
-@router.post('/frames', response_model=VideoFramesResponse)
+@router.post('/frames', response_model=VideoFramesResponse, response_model_exclude_none=True)
 async def upload_video_frames(
     frames: list[UploadFile] = File([]),
     meta: str = Form(...),
+    timestamps: str | None = Form(None),
     user=Depends(get_verified_user),
 ):
     try:
@@ -101,6 +130,7 @@ async def upload_video_frames(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'meta.num_frames is {form.num_frames} but {len(frames)} frames were uploaded',
         )
+    frame_times = None if timestamps is None else _parse_timestamps(timestamps, form.num_frames, form.duration)
 
     frame_bytes = [await frame.read() for frame in frames]
 
@@ -112,6 +142,7 @@ async def upload_video_frames(
             'user_id': user.id,
             'created_at': int(time.time()),
             **form.model_dump(),
+            **({'timestamps': frame_times} if frame_times is not None else {}),
         }
         write_bundle(bundle_meta['id'], frame_bytes, bundle_meta)
         return bundle_meta
