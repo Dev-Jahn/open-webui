@@ -13,6 +13,7 @@ chat status lines. The shapes are defined in mlx-vlm's ``mlx_vlm/server/prefill_
 """
 
 import logging
+import os
 import time
 
 from open_webui.utils.chat_id import CHANNEL_CHAT_ID_PREFIX
@@ -27,6 +28,11 @@ PHASES = {'vision': 'encoding media', 'upload': 'uploading', 'import': 'loading 
 # The final line's short reason after a notice (the notice itself is the status line above it and
 # the toast); any other reason reads 'Windows not used'.
 SHORT_REASONS = {'worker_busy': 'Windows busy', 'worker_unreachable': 'Windows unreachable'}
+# Appended to the worker_unreachable notice (mlx-vlm's text stays deployment-neutral); empty turns it off.
+WORKER_UNREACHABLE_HINT = os.environ.get(
+    'PREFILL_WORKER_UNREACHABLE_HINT',
+    'To use Windows: run prefill-worker start on Windows, or mlx-vlm-server start --windows on the Mac.',
+)
 
 
 def offload_entry(model: dict, models: dict) -> tuple[str, dict | None]:
@@ -116,6 +122,8 @@ class PrefillStatus:
     async def _route(self, route: dict, save: bool) -> None:
         self.where = WHERE.get(route['route'], route['route'])
         notice = route.get('notice')
+        if notice and route.get('reason') == 'worker_unreachable' and WORKER_UNREACHABLE_HINT:
+            notice = f'{notice} {WORKER_UNREACHABLE_HINT}'
         if notice:
             self.reason = SHORT_REASONS.get(route.get('reason'), 'Windows not used')
             await self._status(notice, save)
