@@ -4053,7 +4053,7 @@ async def non_streaming_chat_response_handler(response, ctx):
 
     if event_emitter:
         try:
-            await PrefillStatus(event_emitter).handle_response(response_data)
+            await PrefillStatus(event_emitter, metadata).handle_response(response_data)
             if 'error' in response_data:
                 error = response_data.get('error')
 
@@ -4805,7 +4805,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                     filter_extra_params = {'__body__': form_data, **extra_params} if filter_functions else None
 
-                    prefill_status = PrefillStatus(event_emitter)
+                    prefill_status = PrefillStatus(event_emitter, metadata)
                     async for line in response.body_iterator:
                         line = line.decode('utf-8', 'replace') if isinstance(line, bytes) else line
                         data = line

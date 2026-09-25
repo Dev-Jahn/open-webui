@@ -71,10 +71,18 @@ class PrefillStatus:
     Progress shows on each phase change and 10-percent step, but for a local route without a
     notice only after QUIET_SECONDS. When the answer starts after anything was shown, a last line
     says where the prefill ran and how long it took, timed from this object's creation.
+
+    Only that last line is saved, through `event_emitter`: it is the reply's record and names a
+    notice's short reason. The lines before it are shown live through `live_emitter` (by default
+    ``get_event_emitter(metadata, update_db=False)``, made on first use) because saving a status
+    rewrites the whole chat row, so a save during the prefill can erase the title that the
+    concurrent title task writes. A non-streaming reply's one line (notice or route) is saved.
     """
 
-    def __init__(self, event_emitter, clock=time.monotonic):
+    def __init__(self, event_emitter, metadata: dict, clock=time.monotonic, live_emitter=None):
         self.event_emitter = event_emitter
+        self.metadata = metadata
+        self.live_emitter = live_emitter
         self.clock = clock
         self.started = clock()
         self.where = None  # 'Windows' or 'Mac' once a chunk said so
@@ -93,7 +101,7 @@ class PrefillStatus:
                 await self._finish()
             return False
         if 'prefill_route' in data:
-            await self._route(data['prefill_route'])
+            await self._route(data['prefill_route'], save=False)
             return True
         if 'prefill_progress' in data:
             await self._progress(data['prefill_progress'])
@@ -101,19 +109,19 @@ class PrefillStatus:
         return False
 
     async def handle_response(self, response_data: dict) -> None:
-        """Show a non-streaming response's top-level ``prefill_route`` (removed from it) like a route chunk."""
+        """Show and save a non-streaming response's top-level ``prefill_route`` (removed from it)."""
         if 'prefill_route' in response_data:
-            await self._route(response_data.pop('prefill_route'))
+            await self._route(response_data.pop('prefill_route'), save=True)
 
-    async def _route(self, route: dict) -> None:
+    async def _route(self, route: dict, save: bool) -> None:
         self.where = WHERE.get(route['route'], route['route'])
         notice = route.get('notice')
         if notice:
             self.reason = SHORT_REASONS.get(route.get('reason'), 'Windows not used')
-            await self._status(notice)
+            await self._status(notice, save)
             await self.event_emitter({'type': 'notification', 'data': {'type': 'warning', 'content': notice}})
         if route['route'] == 'remote':
-            await self._status('Prefilling on Windows')
+            await self._status('Prefilling on Windows', save)
 
     async def _progress(self, progress: dict) -> None:
         self.where = WHERE.get(progress['route'], progress['route'])
@@ -124,15 +132,23 @@ class PrefillStatus:
             return
         self.shown = step
         label = f'{int(percent)}%' if phase == 'prefill' else PHASES.get(phase, phase)
-        await self._status(f'Prefill on {self.where}: {label}')
+        await self._status(f'Prefill on {self.where}: {label}', save=False)
 
     async def _finish(self) -> None:
         self.finished = True
         line = f'Prefill done on {self.where} · {self.clock() - self.started:.0f} s'
-        await self._status(f'{line} · {self.reason}' if self.reason else line)
+        await self._status(f'{line} · {self.reason}' if self.reason else line, save=True)
 
-    async def _status(self, description: str) -> None:
+    async def _status(self, description: str, save: bool) -> None:
         self.emitted = True
-        await self.event_emitter(
-            {'type': 'status', 'data': {'action': 'prefill', 'description': description, 'done': True}}
-        )
+        emit = self.event_emitter if save else await self._live()
+        await emit({'type': 'status', 'data': {'action': 'prefill', 'description': description, 'done': True}})
+
+    async def _live(self):
+        """The emitter that shows a line without saving it."""
+        if self.live_emitter is None:
+            # Imported here so this module stays importable without the socket server.
+            from open_webui.socket.main import get_event_emitter
+
+            self.live_emitter = await get_event_emitter(self.metadata, update_db=False)
+        return self.live_emitter

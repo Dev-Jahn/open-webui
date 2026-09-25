@@ -111,16 +111,25 @@ def content(text='Hi'):
 BUSY = 'Windows prefill worker is busy; prefilling on the Mac. Details: Prefill worker busy.'
 
 
-def run_stream(chunks):
-    """Feed (time, chunk) pairs to one PrefillStatus: (the chunks it consumed, the events it emitted)."""
-    clock = SimpleNamespace(now=0.0)
+def recorder():
+    """An emitter and the list of events it received."""
     events = []
 
-    async def event_emitter(event):
+    async def emit(event):
         events.append(event)
 
+    return emit, events
+
+
+def run_stream(chunks):
+    """Feed (time, chunk) pairs to one PrefillStatus: (the chunks it consumed, the events it sent to
+    the saving emitter, the events it sent to the live one)."""
+    clock = SimpleNamespace(now=0.0)
+    save, saved = recorder()
+    show, live = recorder()
+
     async def feed():
-        status = PrefillStatus(event_emitter, clock=lambda: clock.now)
+        status = PrefillStatus(save, CHAT, clock=lambda: clock.now, live_emitter=show)
         consumed = []
         for at, chunk in chunks:
             clock.now = at
@@ -128,7 +137,7 @@ def run_stream(chunks):
                 consumed.append(chunk)
         return consumed
 
-    return asyncio.run(feed()), events
+    return asyncio.run(feed()), saved, live
 
 
 def lines(events):
@@ -143,8 +152,8 @@ def toasts(events):
 
 
 class TestPrefillStatus:
-    def test_remote_shows_route_phases_steps_and_final_line(self):
-        consumed, events = run_stream(
+    def test_remote_shows_route_phases_steps_live_and_saves_final_line(self):
+        consumed, saved, live = run_stream(
             [
                 (0.0, route('remote', 'above_break_even')),
                 (0.1, progress('remote', 'upload', 0.0)),
@@ -160,7 +169,7 @@ class TestPrefillStatus:
             ]
         )
         assert len(consumed) == 9
-        assert lines(events) == [
+        assert lines(live) == [
             'Prefilling on Windows',
             'Prefill on Windows: uploading',
             'Prefill on Windows: encoding media',
@@ -168,12 +177,17 @@ class TestPrefillStatus:
             'Prefill on Windows: 41%',
             'Prefill on Windows: 100%',
             'Prefill on Windows: loading result',
-            'Prefill done on Windows · 181 s',
         ]
-        assert toasts(events) == []
+        assert saved == [
+            {
+                'type': 'status',
+                'data': {'action': 'prefill', 'description': 'Prefill done on Windows · 181 s', 'done': True},
+            }
+        ]
+        assert toasts(live) == []
 
-    def test_local_notice_shows_at_once_toasts_once_and_names_the_reason(self):
-        _, events = run_stream(
+    def test_local_notice_shows_live_toasts_once_and_saves_the_reason(self):
+        _, saved, live = run_stream(
             [
                 (0.5, route('local', 'worker_busy', BUSY)),
                 (1.0, progress('local', 'prefill', 12.0)),
@@ -181,15 +195,18 @@ class TestPrefillStatus:
                 (42.0, content()),
             ]
         )
-        assert lines(events) == [BUSY, 'Prefill on Mac: 12%', 'Prefill done on Mac · 42 s · Windows busy']
-        assert toasts(events) == [{'type': 'warning', 'content': BUSY}]
+        assert lines(live) == [BUSY, 'Prefill on Mac: 12%']
+        assert lines(saved) == ['Prefill done on Mac · 42 s · Windows busy']
+        # A toast is never saved; it goes out once, through the reply's emitter.
+        assert toasts(saved) == [{'type': 'warning', 'content': BUSY}] and toasts(live) == []
 
     def test_unknown_reason_with_notice_reads_generically(self):
-        _, events = run_stream([(0.0, route('local', 'new_reason', 'Something new.')), (5.0, content())])
-        assert lines(events) == ['Something new.', 'Prefill done on Mac · 5 s · Windows not used']
+        _, saved, live = run_stream([(0.0, route('local', 'new_reason', 'Something new.')), (5.0, content())])
+        assert lines(live) == ['Something new.']
+        assert lines(saved) == ['Prefill done on Mac · 5 s · Windows not used']
 
     def test_fast_local_prefix_cached_shows_nothing(self):
-        consumed, events = run_stream(
+        consumed, saved, live = run_stream(
             [
                 (0.2, route('local', 'prefix_cached')),
                 (0.3, progress('local', 'prefill', 0.0)),
@@ -198,10 +215,10 @@ class TestPrefillStatus:
             ]
         )
         assert len(consumed) == 3
-        assert events == []
+        assert saved == [] and live == []
 
     def test_slow_local_without_route_chunk_shows_after_quiet_time(self):
-        _, events = run_stream(
+        _, saved, live = run_stream(
             [
                 (1.0, progress('local', 'prefill', 5.0)),
                 (2.0, progress('local', 'prefill', 15.0)),
@@ -211,7 +228,8 @@ class TestPrefillStatus:
                 (40.0, content()),
             ]
         )
-        assert lines(events) == ['Prefill on Mac: 25%', 'Prefill on Mac: 31%', 'Prefill done on Mac · 40 s']
+        assert lines(live) == ['Prefill on Mac: 25%', 'Prefill on Mac: 31%']
+        assert lines(saved) == ['Prefill done on Mac · 40 s']
 
     @pytest.mark.parametrize(
         'chunk',
@@ -225,18 +243,18 @@ class TestPrefillStatus:
     )
     def test_other_chunks_pass_through_untouched(self, chunk):
         before = copy.deepcopy(chunk)
-        consumed, events = run_stream([(0.0, chunk)])
-        assert consumed == [] and events == [] and chunk == before
+        consumed, saved, live = run_stream([(0.0, chunk)])
+        assert consumed == [] and saved == [] and live == [] and chunk == before
 
-    def test_error_chunk_passes_through_without_final_line(self):
+    def test_error_chunk_passes_through_and_saves_nothing(self):
         error = {'error': {'message': 'Worker failed', 'type': 'prefill_error', 'code': 'prefill_failed'}}
-        consumed, events = run_stream([(0.0, route('remote', 'above_break_even')), (5.0, error)])
+        consumed, saved, live = run_stream([(0.0, route('remote', 'above_break_even')), (5.0, error)])
         assert consumed == [route('remote', 'above_break_even')]
-        assert lines(events) == ['Prefilling on Windows']
+        assert lines(live) == ['Prefilling on Windows'] and saved == []
 
     def test_responses_api_output_event_ends_the_prefill(self):
         responses_route = {'type': 'response.prefill_route', 'prefill_route': route('remote', 'x')['prefill_route']}
-        consumed, events = run_stream(
+        consumed, saved, live = run_stream(
             [
                 (0.0, {'type': 'response.created', 'response': {}}),
                 (0.1, responses_route),
@@ -245,7 +263,30 @@ class TestPrefillStatus:
             ]
         )
         assert consumed == [responses_route]
-        assert lines(events) == ['Prefilling on Windows', 'Prefill done on Windows · 30 s']
+        assert lines(live) == ['Prefilling on Windows']
+        assert lines(saved) == ['Prefill done on Windows · 30 s']
+
+    def test_live_emitter_defaults_to_a_non_saving_socket_emitter_made_once(self, monkeypatch):
+        show, live = recorder()
+        calls = []
+
+        async def get_event_emitter(request_info, update_db=True):
+            calls.append((request_info, update_db))
+            return show
+
+        monkeypatch.setattr('open_webui.socket.main.get_event_emitter', get_event_emitter)
+        save, saved = recorder()
+
+        async def feed():
+            status = PrefillStatus(save, CHAT)
+            await status.handle(route('remote', 'above_break_even'))
+            await status.handle(progress('remote', 'prefill', 50.0))
+            await status.handle(content())
+
+        asyncio.run(feed())
+        assert calls == [(CHAT, False)]
+        assert lines(live) == ['Prefilling on Windows', 'Prefill on Windows: 50%']
+        assert lines(saved) == ['Prefill done on Windows · 0 s']
 
     @pytest.mark.parametrize(
         'signal, expected_lines, expected_toasts',
@@ -256,15 +297,15 @@ class TestPrefillStatus:
         ],
         ids=['local-notice', 'remote', 'no-route'],
     )
-    def test_non_streaming_response_route(self, signal, expected_lines, expected_toasts):
-        events = []
+    def test_non_streaming_response_route_is_saved(self, signal, expected_lines, expected_toasts):
+        save, saved = recorder()
 
-        async def event_emitter(event):
-            events.append(event)
+        async def no_live(event):
+            raise AssertionError(f'a non-streaming reply showed a line without saving it: {event}')
 
         response_data = {'choices': [{'message': {'content': 'Hi'}}]}
         if signal is not None:
             response_data['prefill_route'] = signal
-        asyncio.run(PrefillStatus(event_emitter).handle_response(response_data))
+        asyncio.run(PrefillStatus(save, CHAT, live_emitter=no_live).handle_response(response_data))
         assert response_data == {'choices': [{'message': {'content': 'Hi'}}]}
-        assert lines(events) == expected_lines and toasts(events) == expected_toasts
+        assert lines(saved) == expected_lines and toasts(saved) == expected_toasts
