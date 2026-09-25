@@ -23,6 +23,7 @@ from pathlib import Path
 
 from fastapi import HTTPException, status
 from open_webui.config import UPLOAD_DIR
+from open_webui.utils.misc import is_raster_image_content_type
 
 log = logging.getLogger(__name__)
 
@@ -183,7 +184,7 @@ def _is_video_item(item: dict) -> bool:
 
 
 def _is_image_item(item: dict) -> bool:
-    return item.get('type') == 'image' or (item.get('content_type') or '').startswith('image/')
+    return item.get('type') == 'image' or is_raster_image_content_type(item.get('content_type'))
 
 
 def _extract_text_video_parts(text: str) -> tuple[str, list[dict]]:

@@ -48,7 +48,7 @@
 
 	const persist = async () => {
 		persistTimer = null;
-		await updateUserSettings(localStorage.token, { ui: $settings });
+		await updateUserSettings(localStorage.token, { ui: { videoInput: $settings.videoInput } });
 	};
 
 	const update = (modelId: string, info: VideoInputInfo, patch: Partial<VideoInputSettings>) => {

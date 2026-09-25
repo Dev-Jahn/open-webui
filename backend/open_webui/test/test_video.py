@@ -414,6 +414,28 @@ class TestInjectUntouched:
         assert video.inject_media_parts({'model': 'm'}, MODEL, USER, {}) == {'model': 'm'}
 
 
+class TestSvgIsADocument:
+    """As upstream 0.11.4 (is_raster_image_content_type): an SVG reaches the model as a document, never as an image."""
+
+    @pytest.mark.parametrize('content_type', ['image/svg+xml', 'image/svg+xml; charset=utf-8'])
+    def test_svg_only_message_is_left_for_upstream(self, upload_dir, content_type):
+        svg = {'type': 'file', 'content_type': content_type, 'url': 'svg-id'}
+        messages = [{'role': 'user', 'content': 'what is this?', 'files': [svg]}]
+
+        form = video.inject_media_parts({'messages': copy.deepcopy(messages)}, MODEL, USER, {})
+
+        assert form['messages'] == messages
+
+    def test_svg_beside_raster_image_and_video_gets_no_part(self, upload_dir):
+        svg = {'type': 'file', 'content_type': 'image/svg+xml', 'url': 'svg-id'}
+
+        form = video.inject_media_parts(request_with([svg, IMAGE_B, frames_item(make_bundle())]), MODEL, USER, {})
+
+        content = form['messages'][0]['content']
+        assert [part['type'] for part in content] == ['image_url', 'video_frames', 'text']
+        assert content[0] == image_part(IMAGE_B)
+
+
 class TestTextUrls:
     def test_file_url_token_becomes_video_part(self, upload_dir):
         form = video.inject_media_parts(request_with([], 'what moves? file:///tmp/clip.mp4'), MODEL, USER, {})
