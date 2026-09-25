@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from open_webui.models.users import UserSettings
+from open_webui.utils import prefill
 from open_webui.utils.prefill import PrefillStatus, apply_prefill_switch
 
 OFFLOAD = {'available': True, 'mode': 'media', 'auto': True, 'break_even_tokens': 6000}
@@ -199,6 +200,14 @@ class TestPrefillStatus:
         assert lines(saved) == ['Prefill done on Mac · 42 s · Windows busy']
         # A toast is never saved; it goes out once, through the reply's emitter.
         assert toasts(saved) == [{'type': 'warning', 'content': BUSY}] and toasts(live) == []
+
+    def test_unreachable_notice_gets_the_start_hint(self):
+        notice = 'Windows prefill worker is not reachable; prefilling on the Mac.'
+        _, saved, live = run_stream([(0.5, route('local', 'worker_unreachable', notice)), (5.0, content())])
+        expected = f'{notice} {prefill.WORKER_UNREACHABLE_HINT}'
+        assert lines(live) == [expected]
+        assert toasts(saved) == [{'type': 'warning', 'content': expected}]
+        assert lines(saved) == ['Prefill done on Mac · 5 s · Windows unreachable']
 
     def test_unknown_reason_with_notice_reads_generically(self):
         _, saved, live = run_stream([(0.0, route('local', 'new_reason', 'Something new.')), (5.0, content())])
