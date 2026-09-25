@@ -77,6 +77,7 @@
 	import VideoFileItem from './MessageInput/VideoFileItem.svelte';
 	import { addVideoFile, forgetVideoFile, resyncVideoFiles } from './MessageInput/videoFiles';
 	import ModelSelector from './ModelSelector.svelte';
+	import MlxVlmOfflineHint from './MlxVlmOfflineHint.svelte';
 
 	import ToolServersModal from './ToolServersModal.svelte';
 	import SkillsModal from './SkillsModal.svelte';
@@ -2747,6 +2748,7 @@
 								</div>
 							</div>
 						</div>
+						<MlxVlmOfflineHint />
 
 						{#if $config?.license_metadata?.input_footer}
 							<div class=" text-xs text-gray-500 text-center line-clamp-1 marked">
