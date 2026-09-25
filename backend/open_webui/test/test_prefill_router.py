@@ -28,8 +28,8 @@ RESULT = {
     'applied': True,
     'saved_to': '/tmp/worker.json',
     'points': [
-        {'prompt_tokens': 4133, 'mac_seconds': 9.8, 'windows_seconds': 14.2},
-        {'prompt_tokens': 12400, 'mac_seconds': 35.1, 'windows_seconds': 13.0},
+        {'prompt_tokens': 4133, 'local_seconds': 9.8, 'offload_seconds': 14.2},
+        {'prompt_tokens': 12400, 'local_seconds': 35.1, 'offload_seconds': 13.0},
     ],
     'elapsed_seconds': 80.3,
     'note': None,

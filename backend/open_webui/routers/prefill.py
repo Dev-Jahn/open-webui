@@ -1,9 +1,10 @@
-"""Measure mlx-vlm's Windows-vs-Mac prefill break-even and apply it (admin only).
+"""Measure mlx-vlm's local-vs-offload prefill break-even and apply it (admin only).
 
-mlx-vlm's ``POST /v1/prefill/calibrate`` prefills a short and a long prompt on the Mac and on the
-Windows worker, finds where the two timings cross and, with ``apply``, makes that its routing
-threshold, which ``/v1/models`` then reports as ``prefill_offload.break_even_tokens``. It takes a
-minute or two; chats sent meanwhile wait behind it on the server. On an error nothing changes.
+mlx-vlm's ``POST /v1/prefill/calibrate`` prefills a short and a long prompt locally and on the
+prefill offload worker, finds where the two timings cross and, with ``apply``, makes that its
+routing threshold, which ``/v1/models`` then reports as ``prefill_offload.break_even_tokens``. It
+takes a minute or two; chats sent meanwhile wait behind it on the server. On an error nothing
+changes.
 
 ``GET /connection`` (any verified user) says whether the OpenAI connections are reachable and, when
 one is not, how to start mlx-vlm; ``MlxVlmOfflineHint`` under the chat input asks when the model
@@ -57,7 +58,7 @@ def _served_entry(models, model_id: str) -> tuple[str, dict]:
     if 'prefill_offload' not in entry:
         raise HTTPException(
             status_code=400,
-            detail=f'Model {served_id} has no prefill_offload (not an mlx-vlm with a Windows prefill worker)',
+            detail=f'Model {served_id} has no prefill_offload (not an mlx-vlm with a prefill offload worker)',
         )
     if 'urlIdx' not in entry:
         raise HTTPException(status_code=400, detail=f'Model {served_id} is not served through an OpenAI connection')

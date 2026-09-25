@@ -16,11 +16,11 @@ services:
       - host.docker.internal:host-gateway
     environment:
       ENABLE_OLLAMA_API: "false"
-      # mlx-vlm runs natively on the Mac (--port 8199). These two only seed the database on the
+      # mlx-vlm runs natively on the host (--port 8199). These two only seed the database on the
       # first start; change the connection later in Admin > Settings > Connections.
       OPENAI_API_BASE_URL: http://host.docker.internal:8199/v1
       OPENAI_API_KEY: not-needed
-      # mlx-vlm reads video frames from disk by HOST path: the uploads dir as the Mac sees it.
+      # mlx-vlm reads video frames from disk by HOST path: the uploads dir as the host sees it.
       VIDEO_FRAMES_TRANSPORT: path
       VIDEO_SHARED_PATH: ${HOME}/.local/share/open-webui-fork/uploads
       # Keep the generated session secret in the data dir, so logins survive re-creating the container.

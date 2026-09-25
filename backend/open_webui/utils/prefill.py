@@ -1,10 +1,10 @@
-"""Windows prefill offload for mlx-vlm: the per-model switch and the prefill status lines.
+"""Prefill offload for mlx-vlm: the per-model switch and the prefill status lines.
 
-mlx-vlm can prefill a long prompt on a Windows worker. Its `/v1/models` entries say so in
-``prefill_offload`` (``auto`` true: a request with ``prefill_route: "auto"`` may be offloaded).
-Each user has one switch per model, the top-level user setting ``prefillOffload`` =
-{model id: bool}; a missing entry means on. A preset (``info.base_model_id``) uses its base
-model's switch and capability.
+mlx-vlm can hand a long prompt's prefill to another machine, the prefill offload worker, and
+decode locally. Its `/v1/models` entries say so in ``prefill_offload`` (``auto`` true: a request
+with ``prefill_route: "auto"`` may be offloaded). Each user has one switch per model, the
+top-level user setting ``prefillOffload`` = {model id: bool}; a missing entry means on. A preset
+(``info.base_model_id``) uses its base model's switch and capability.
 
 ``apply_prefill_switch`` turns the switch into the request fields ``prefill_route`` ("auto" on,
 "local" off) and ``prefill_progress``. ``PrefillStatus`` turns the ``prefill_route`` and
@@ -23,15 +23,18 @@ log = logging.getLogger(__name__)
 # A local prefill without a notice stays silent this long, so short prompts never flicker.
 QUIET_SECONDS = 3.0
 
-WHERE = {'remote': 'Windows', 'local': 'Mac'}
+# Line prefixes by mlx-vlm route: 'remote' is the offload worker, 'local' the server itself. A route
+# mlx-vlm may add later shows under its own name.
+PROGRESS_LABELS = {'remote': 'Prefill (offload worker)', 'local': 'Prefill (local)'}
+DONE_LABELS = {'remote': 'Prefill offloaded', 'local': 'Prefill done locally'}
 PHASES = {'vision': 'encoding media', 'upload': 'uploading', 'import': 'loading result'}
 # The final line's short reason after a notice (the notice itself is the status line above it and
-# the toast); any other reason reads 'Windows not used'.
-SHORT_REASONS = {'worker_busy': 'Windows busy', 'worker_unreachable': 'Windows unreachable'}
+# the toast); any other reason reads 'offload not used'.
+SHORT_REASONS = {'worker_busy': 'offload worker busy', 'worker_unreachable': 'offload worker unreachable'}
 # Appended to the worker_unreachable notice (mlx-vlm's text stays deployment-neutral); empty turns it off.
 WORKER_UNREACHABLE_HINT = os.environ.get(
     'PREFILL_WORKER_UNREACHABLE_HINT',
-    'To use Windows: run prefill-worker start on Windows, or mlx-vlm-server start --windows on the Mac.',
+    'To use prefill offload: run prefill-worker start on the offload worker, or mlx-vlm-server start --offload.',
 )
 
 
@@ -76,7 +79,7 @@ class PrefillStatus:
     A notice becomes a status line and a warning toast; a remote route is announced at once.
     Progress shows on each phase change and 10-percent step, but for a local route without a
     notice only after QUIET_SECONDS. When the answer starts after anything was shown, a last line
-    says where the prefill ran and how long it took, timed from this object's creation.
+    says whether the prefill was offloaded and how long it took, timed from this object's creation.
 
     Only that last line is saved, through `event_emitter`: it is the reply's record and names a
     notice's short reason. The lines before it are shown live through `live_emitter` (by default
@@ -91,7 +94,7 @@ class PrefillStatus:
         self.live_emitter = live_emitter
         self.clock = clock
         self.started = clock()
-        self.where = None  # 'Windows' or 'Mac' once a chunk said so
+        self.route = None  # mlx-vlm's route ('remote' or 'local') once a chunk said so
         self.reason = None  # short reason once a notice was shown
         self.shown = None  # (phase, 10-percent step) of the last progress line
         self.emitted = False
@@ -120,19 +123,19 @@ class PrefillStatus:
             await self._route(response_data.pop('prefill_route'), save=True)
 
     async def _route(self, route: dict, save: bool) -> None:
-        self.where = WHERE.get(route['route'], route['route'])
+        self.route = route['route']
         notice = route.get('notice')
         if notice and route.get('reason') == 'worker_unreachable' and WORKER_UNREACHABLE_HINT:
             notice = f'{notice} {WORKER_UNREACHABLE_HINT}'
         if notice:
-            self.reason = SHORT_REASONS.get(route.get('reason'), 'Windows not used')
+            self.reason = SHORT_REASONS.get(route.get('reason'), 'offload not used')
             await self._status(notice, save)
             await self.event_emitter({'type': 'notification', 'data': {'type': 'warning', 'content': notice}})
         if route['route'] == 'remote':
-            await self._status('Prefilling on Windows', save)
+            await self._status('Prefill offloading', save)
 
     async def _progress(self, progress: dict) -> None:
-        self.where = WHERE.get(progress['route'], progress['route'])
+        self.route = progress['route']
         phase, percent = progress['phase'], progress['percent']
         quiet = progress['route'] != 'remote' and self.reason is None and self.clock() - self.started < QUIET_SECONDS
         step = (phase, int(percent // 10))
@@ -140,11 +143,13 @@ class PrefillStatus:
             return
         self.shown = step
         label = f'{int(percent)}%' if phase == 'prefill' else PHASES.get(phase, phase)
-        await self._status(f'Prefill on {self.where}: {label}', save=False)
+        prefix = PROGRESS_LABELS.get(self.route, f'Prefill ({self.route})')
+        await self._status(f'{prefix}: {label}', save=False)
 
     async def _finish(self) -> None:
         self.finished = True
-        line = f'Prefill done on {self.where} · {self.clock() - self.started:.0f} s'
+        done = DONE_LABELS.get(self.route, f'Prefill done ({self.route})')
+        line = f'{done} · {self.clock() - self.started:.0f} s'
         await self._status(f'{line} · {self.reason}' if self.reason else line, save=True)
 
     async def _status(self, description: str, save: bool) -> None:

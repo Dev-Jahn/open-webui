@@ -109,7 +109,8 @@ def content(text='Hi'):
     return {'object': 'chat.completion.chunk', 'choices': [{'index': 0, 'delta': {'content': text}}]}
 
 
-BUSY = 'Windows prefill worker is busy; prefilling on the Mac. Details: Prefill worker busy.'
+# mlx-vlm's ROUTE_NOTICES['worker_busy'] plus a detail (mlx_vlm/server/prefill_signals.py).
+BUSY = 'Prefill offload worker is busy; prefilling locally. Details: Prefill worker busy.'
 
 
 def recorder():
@@ -171,18 +172,18 @@ class TestPrefillStatus:
         )
         assert len(consumed) == 9
         assert lines(live) == [
-            'Prefilling on Windows',
-            'Prefill on Windows: uploading',
-            'Prefill on Windows: encoding media',
-            'Prefill on Windows: 0%',
-            'Prefill on Windows: 41%',
-            'Prefill on Windows: 100%',
-            'Prefill on Windows: loading result',
+            'Prefill offloading',
+            'Prefill (offload worker): uploading',
+            'Prefill (offload worker): encoding media',
+            'Prefill (offload worker): 0%',
+            'Prefill (offload worker): 41%',
+            'Prefill (offload worker): 100%',
+            'Prefill (offload worker): loading result',
         ]
         assert saved == [
             {
                 'type': 'status',
-                'data': {'action': 'prefill', 'description': 'Prefill done on Windows · 181 s', 'done': True},
+                'data': {'action': 'prefill', 'description': 'Prefill offloaded · 181 s', 'done': True},
             }
         ]
         assert toasts(live) == []
@@ -196,23 +197,23 @@ class TestPrefillStatus:
                 (42.0, content()),
             ]
         )
-        assert lines(live) == [BUSY, 'Prefill on Mac: 12%']
-        assert lines(saved) == ['Prefill done on Mac · 42 s · Windows busy']
+        assert lines(live) == [BUSY, 'Prefill (local): 12%']
+        assert lines(saved) == ['Prefill done locally · 42 s · offload worker busy']
         # A toast is never saved; it goes out once, through the reply's emitter.
         assert toasts(saved) == [{'type': 'warning', 'content': BUSY}] and toasts(live) == []
 
     def test_unreachable_notice_gets_the_start_hint(self):
-        notice = 'Windows prefill worker is not reachable; prefilling on the Mac.'
+        notice = 'Prefill offload worker is not reachable; prefilling locally.'
         _, saved, live = run_stream([(0.5, route('local', 'worker_unreachable', notice)), (5.0, content())])
         expected = f'{notice} {prefill.WORKER_UNREACHABLE_HINT}'
         assert lines(live) == [expected]
         assert toasts(saved) == [{'type': 'warning', 'content': expected}]
-        assert lines(saved) == ['Prefill done on Mac · 5 s · Windows unreachable']
+        assert lines(saved) == ['Prefill done locally · 5 s · offload worker unreachable']
 
     def test_unknown_reason_with_notice_reads_generically(self):
         _, saved, live = run_stream([(0.0, route('local', 'new_reason', 'Something new.')), (5.0, content())])
         assert lines(live) == ['Something new.']
-        assert lines(saved) == ['Prefill done on Mac · 5 s · Windows not used']
+        assert lines(saved) == ['Prefill done locally · 5 s · offload not used']
 
     def test_fast_local_prefix_cached_shows_nothing(self):
         consumed, saved, live = run_stream(
@@ -237,8 +238,8 @@ class TestPrefillStatus:
                 (40.0, content()),
             ]
         )
-        assert lines(live) == ['Prefill on Mac: 25%', 'Prefill on Mac: 31%']
-        assert lines(saved) == ['Prefill done on Mac · 40 s']
+        assert lines(live) == ['Prefill (local): 25%', 'Prefill (local): 31%']
+        assert lines(saved) == ['Prefill done locally · 40 s']
 
     @pytest.mark.parametrize(
         'chunk',
@@ -259,7 +260,7 @@ class TestPrefillStatus:
         error = {'error': {'message': 'Worker failed', 'type': 'prefill_error', 'code': 'prefill_failed'}}
         consumed, saved, live = run_stream([(0.0, route('remote', 'above_break_even')), (5.0, error)])
         assert consumed == [route('remote', 'above_break_even')]
-        assert lines(live) == ['Prefilling on Windows'] and saved == []
+        assert lines(live) == ['Prefill offloading'] and saved == []
 
     def test_responses_api_output_event_ends_the_prefill(self):
         responses_route = {'type': 'response.prefill_route', 'prefill_route': route('remote', 'x')['prefill_route']}
@@ -272,8 +273,8 @@ class TestPrefillStatus:
             ]
         )
         assert consumed == [responses_route]
-        assert lines(live) == ['Prefilling on Windows']
-        assert lines(saved) == ['Prefill done on Windows · 30 s']
+        assert lines(live) == ['Prefill offloading']
+        assert lines(saved) == ['Prefill offloaded · 30 s']
 
     def test_live_emitter_defaults_to_a_non_saving_socket_emitter_made_once(self, monkeypatch):
         show, live = recorder()
@@ -294,14 +295,14 @@ class TestPrefillStatus:
 
         asyncio.run(feed())
         assert calls == [(CHAT, False)]
-        assert lines(live) == ['Prefilling on Windows', 'Prefill on Windows: 50%']
-        assert lines(saved) == ['Prefill done on Windows · 0 s']
+        assert lines(live) == ['Prefill offloading', 'Prefill (offload worker): 50%']
+        assert lines(saved) == ['Prefill offloaded · 0 s']
 
     @pytest.mark.parametrize(
         'signal, expected_lines, expected_toasts',
         [
             (route('local', 'worker_busy', BUSY)['prefill_route'], [BUSY], [{'type': 'warning', 'content': BUSY}]),
-            (route('remote', 'above_break_even')['prefill_route'], ['Prefilling on Windows'], []),
+            (route('remote', 'above_break_even')['prefill_route'], ['Prefill offloading'], []),
             (None, [], []),
         ],
         ids=['local-notice', 'remote', 'no-route'],

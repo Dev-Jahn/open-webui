@@ -99,8 +99,9 @@
 	const tokens = (n: number) => n.toLocaleString();
 	const seconds = (n: number) => n.toFixed(1);
 
-	// Admin only: mlx-vlm times a short and a long prompt on the Mac and on Windows and applies
-	// the crossing as the new break-even; the model list is then reloaded so it shows the new value.
+	// Admin only: mlx-vlm times a short and a long prompt locally and on the offload worker and
+	// applies the crossing as the new break-even; the model list is then reloaded so it shows the
+	// new value.
 	const measure = async (switchId: string) => {
 		measuring.update((m) => ({ ...m, [switchId]: true }));
 		try {
@@ -142,7 +143,8 @@
 	>
 		<div class="pt-1 pb-1 text-xs flex flex-col gap-1" slot="content">
 			{#each rows as { model, switchId, breakEven } (model.id)}
-				{@const label = rows.length > 1 ? (model.name ?? model.id) : $i18n.t('Prefill on Windows')}
+				{@const label =
+					rows.length > 1 ? (model.name ?? model.id) : $i18n.t('Offload long prompts')}
 				<div class="flex w-full items-center justify-between gap-2 py-0.5">
 					<div class="self-center text-xs line-clamp-1">{label}</div>
 					{#key reverts}
@@ -160,7 +162,7 @@
 					>
 						<div class="line-clamp-1">
 							{#if breakEven !== null}
-								{$i18n.t('Windows from {{tokens}} tokens', { tokens: tokens(breakEven) })}
+								{$i18n.t('Offload from {{tokens}} tokens', { tokens: tokens(breakEven) })}
 							{/if}
 						</div>
 						<button
@@ -187,10 +189,10 @@
 							</div>
 							{#each result.points as point}
 								<div>
-									{$i18n.t('{{tokens}} tokens: Mac {{mac}} s / Windows {{windows}} s', {
+									{$i18n.t('{{tokens}} tokens: local {{local}} s / offload {{offload}} s', {
 										tokens: tokens(point.prompt_tokens),
-										mac: seconds(point.mac_seconds),
-										windows: seconds(point.windows_seconds)
+										local: seconds(point.local_seconds),
+										offload: seconds(point.offload_seconds)
 									})}
 								</div>
 							{/each}
@@ -203,7 +205,7 @@
 			{/each}
 			<div class="text-xs text-gray-500 dark:text-gray-400">
 				{$i18n.t(
-					'When on, long prompts are prefilled on the Windows PC only when that is faster and the PC is free; otherwise on this Mac.'
+					'Send long prompts to the prefill offload worker when that is faster and the worker is free; otherwise prefill locally.'
 				)}
 			</div>
 		</div>

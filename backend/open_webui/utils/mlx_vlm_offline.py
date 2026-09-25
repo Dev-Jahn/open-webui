@@ -25,8 +25,8 @@ log = logging.getLogger(__name__)
 
 MLX_VLM_OFFLINE_HINT = os.environ.get(
     'MLX_VLM_OFFLINE_HINT',
-    'mlx-vlm server is not running. Start it on the Mac: mlx-vlm-server start --windows '
-    '(or without --windows for the Mac only).',
+    'mlx-vlm server is not running. Start it: mlx-vlm-server start --offload '
+    '(or without --offload for local prefill only).',
 )
 PROBE_TIMEOUT_SECONDS = 1.5
 

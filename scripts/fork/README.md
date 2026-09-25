@@ -1,6 +1,6 @@
 # Running this fork in Docker
 
-Open WebUI runs as a Docker container built from this fork. mlx-vlm runs natively on the Mac and
+Open WebUI runs as a Docker container built from this fork. mlx-vlm runs natively on the host and
 must listen on port **8199** on all interfaces (the container reaches it as
 `host.docker.internal:8199`), for example:
 
@@ -37,7 +37,7 @@ Open <http://localhost:8080>. The port is bound to 127.0.0.1 only.
 
 ## Data
 
-Everything lives in `~/.local/share/open-webui-fork` on the Mac: the database, uploads, video
+Everything lives in `~/.local/share/open-webui-fork` on the host: the database, uploads, video
 frame bundles (`uploads/video_frames/`) and the session secret (`.webui_secret_key`; keeps you
 logged in across container re-creation). Back up or delete that directory; the container holds no
 state.

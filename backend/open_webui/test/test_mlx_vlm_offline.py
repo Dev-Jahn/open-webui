@@ -37,8 +37,8 @@ def down():
 @pytest.mark.skipif('MLX_VLM_OFFLINE_HINT' in os.environ, reason='the hint is overridden in this environment')
 def test_default_hint_is_the_owners_text():
     assert MLX_VLM_OFFLINE_HINT == (
-        'mlx-vlm server is not running. Start it on the Mac: mlx-vlm-server start --windows '
-        '(or without --windows for the Mac only).'
+        'mlx-vlm server is not running. Start it: mlx-vlm-server start --offload '
+        '(or without --offload for local prefill only).'
     )
 
 

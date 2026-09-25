@@ -1,20 +1,39 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 
-/** mlx-vlm's answer to POST /v1/prefill/calibrate, passed through unchanged. */
+/** One measured prompt length: prefill seconds locally and on the prefill offload worker. */
+export type PrefillCalibrationPoint = {
+	prompt_tokens: number;
+	local_seconds: number;
+	offload_seconds: number;
+};
+
+/** mlx-vlm's answer to POST /v1/prefill/calibrate, passed through unchanged except `points`. */
 export type PrefillCalibration = {
 	route_min_tokens: { before: number; after: number };
 	applied: boolean;
 	saved_to: string | null;
-	points: { prompt_tokens: number; mac_seconds: number; windows_seconds: number }[];
+	points: PrefillCalibrationPoint[];
 	elapsed_seconds: number;
-	/** null unless the Mac and Windows timings do not cross within the measured range. */
+	/** null unless the local and offload timings do not cross within the measured range. */
 	note: string | null;
 };
 
+/** mlx-vlm's calibration point with its timings under the current names. */
+const calibrationPoint = (point: any): PrefillCalibrationPoint => {
+	// mac_/windows_seconds: old mlx-vlm field names; drop once every server sends local_/offload_seconds
+	const local = point?.local_seconds ?? point?.mac_seconds;
+	const offload = point?.offload_seconds ?? point?.windows_seconds;
+	if (typeof local !== 'number' || typeof offload !== 'number') {
+		throw new Error(`mlx-vlm sent a calibration point without timings: ${JSON.stringify(point)}`);
+	}
+	return { prompt_tokens: point.prompt_tokens, local_seconds: local, offload_seconds: offload };
+};
+
 /**
- * Measures where prefilling on the Windows worker becomes faster than on the Mac for a model's
- * mlx-vlm server and, with `apply`, makes that the new break-even → POST /api/v1/prefill/calibrate
- * (admin only). Takes 1-2 minutes; chats sent meanwhile wait behind it.
+ * Measures where prefilling on the prefill offload worker becomes faster than locally for a
+ * model's mlx-vlm server and, with `apply`, makes that the new break-even
+ * → POST /api/v1/prefill/calibrate (admin only). Takes 1-2 minutes; chats sent meanwhile wait
+ * behind it.
  */
 export const calibratePrefill = async (
 	token: string,
@@ -41,7 +60,8 @@ export const calibratePrefill = async (
 					: `HTTP ${res.status} ${res.statusText}`
 		);
 	}
-	return res.json();
+	const result = await res.json();
+	return { ...result, points: result.points.map(calibrationPoint) };
 };
 
 /** Whether the OpenAI connections are reachable; `hint` says how to start mlx-vlm when one is not. */
