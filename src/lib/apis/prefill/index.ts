@@ -18,15 +18,13 @@ export type PrefillCalibration = {
 	note: string | null;
 };
 
-/** mlx-vlm's calibration point with its timings under the current names. */
+/** mlx-vlm's calibration point, which must carry both timings (mlx-vlm c586c03b or later). */
 const calibrationPoint = (point: any): PrefillCalibrationPoint => {
-	// mac_/windows_seconds: old mlx-vlm field names; drop once every server sends local_/offload_seconds
-	const local = point?.local_seconds ?? point?.mac_seconds;
-	const offload = point?.offload_seconds ?? point?.windows_seconds;
-	if (typeof local !== 'number' || typeof offload !== 'number') {
+	const { prompt_tokens, local_seconds, offload_seconds } = point ?? {};
+	if (typeof local_seconds !== 'number' || typeof offload_seconds !== 'number') {
 		throw new Error(`mlx-vlm sent a calibration point without timings: ${JSON.stringify(point)}`);
 	}
-	return { prompt_tokens: point.prompt_tokens, local_seconds: local, offload_seconds: offload };
+	return { prompt_tokens, local_seconds, offload_seconds };
 };
 
 /**
