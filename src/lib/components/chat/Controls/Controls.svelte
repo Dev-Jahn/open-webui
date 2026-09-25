@@ -7,6 +7,7 @@
 	import AdvancedParams from '../Settings/Advanced/AdvancedParams.svelte';
 	import Valves from '$lib/components/chat/Controls/Valves.svelte';
 	import VideoInputControls from '$lib/components/chat/Controls/VideoInputControls.svelte';
+	import PrefillOffloadControls from '$lib/components/chat/Controls/PrefillOffloadControls.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
@@ -130,6 +131,7 @@
 			{/if}
 
 			<VideoInputControls {models} buttonClassName={compactSectionButtonClass} />
+			<PrefillOffloadControls {models} buttonClassName={compactSectionButtonClass} />
 
 			{#if $user?.role === 'admin' || ($user?.permissions.chat?.params ?? true)}
 				<Collapsible

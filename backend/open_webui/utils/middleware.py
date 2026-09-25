@@ -139,6 +139,7 @@ from open_webui.utils.tools import (
     get_tools,
     get_updated_tool_function,
 )
+from open_webui.utils.prefill import PrefillStatus, apply_prefill_switch
 from open_webui.utils.video import inject_media_parts, put_media_first
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
@@ -2405,6 +2406,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     model_system_prompt = (form_data.get('params') or {}).get('system')
 
     form_data = apply_params_to_form_data(form_data, model)
+    form_data = apply_prefill_switch(form_data, model, user, metadata, request.app.state.MODELS)
     log.debug('form_data: %s', form_data)
 
     # Guided regeneration: extract before it reaches the LLM provider
@@ -4051,6 +4053,7 @@ async def non_streaming_chat_response_handler(response, ctx):
 
     if event_emitter:
         try:
+            await PrefillStatus(event_emitter).handle_response(response_data)
             if 'error' in response_data:
                 error = response_data.get('error')
 
@@ -4802,6 +4805,7 @@ async def streaming_chat_response_handler(response, ctx):
 
                     filter_extra_params = {'__body__': form_data, **extra_params} if filter_functions else None
 
+                    prefill_status = PrefillStatus(event_emitter)
                     async for line in response.body_iterator:
                         line = line.decode('utf-8', 'replace') if isinstance(line, bytes) else line
                         data = line
@@ -4840,6 +4844,8 @@ async def streaming_chat_response_handler(response, ctx):
 
                         try:
                             data = JSONCodec.loads(data)
+                            if await prefill_status.handle(data):
+                                continue
 
                             if filter_functions:
                                 data, _ = await process_filter_functions(
