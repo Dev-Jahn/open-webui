@@ -29,7 +29,7 @@ PHASES = {'vision': 'encoding media', 'upload': 'uploading', 'import': 'loading 
 SHORT_REASONS = {'worker_busy': 'Windows busy', 'worker_unreachable': 'Windows unreachable'}
 
 
-def _offload_entry(model: dict, models: dict) -> tuple[str, dict | None]:
+def offload_entry(model: dict, models: dict) -> tuple[str, dict | None]:
     """(switch key, models entry whose prefill_offload applies). A preset reads its base model's
     entry in `models` (request.app.state.MODELS): None when the base model is not served."""
     base_model_id = (model.get('info') or {}).get('base_model_id')
@@ -50,7 +50,7 @@ def apply_prefill_switch(form_data: dict, model: dict, user, metadata: dict, mod
     chat_id = metadata.get('chat_id') or ''
     if not (chat_id and metadata.get('message_id')) or chat_id.startswith(CHANNEL_CHAT_ID_PREFIX):
         return form_data
-    model_id, entry = _offload_entry(model, models)
+    model_id, entry = offload_entry(model, models)
     if entry is None or (entry.get('prefill_offload') or {}).get('auto') is not True:
         return form_data
     switches = getattr(user.settings, 'prefillOffload', None) or {}
