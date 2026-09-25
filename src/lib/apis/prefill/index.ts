@@ -43,3 +43,20 @@ export const calibratePrefill = async (
 	}
 	return res.json();
 };
+
+/** Whether the OpenAI connections are reachable; `hint` says how to start mlx-vlm when one is not. */
+export type ConnectionState = { reachable: boolean; hint: string | null };
+
+/**
+ * Checks that every enabled OpenAI connection accepts a connection (1-2 s at most)
+ * → GET /api/v1/prefill/connection (any verified user).
+ */
+export const getConnectionState = async (token: string): Promise<ConnectionState> => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/prefill/connection`, {
+		headers: { Accept: 'application/json', authorization: `Bearer ${token}` }
+	});
+	if (!res.ok) {
+		throw new Error(`HTTP ${res.status} ${res.statusText}`);
+	}
+	return res.json();
+};

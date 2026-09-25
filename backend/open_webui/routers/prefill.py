@@ -4,6 +4,10 @@ mlx-vlm's ``POST /v1/prefill/calibrate`` prefills a short and a long prompt on t
 Windows worker, finds where the two timings cross and, with ``apply``, makes that its routing
 threshold, which ``/v1/models`` then reports as ``prefill_offload.break_even_tokens``. It takes a
 minute or two; chats sent meanwhile wait behind it on the server. On an error nothing changes.
+
+``GET /connection`` (any verified user) says whether the OpenAI connections are reachable and, when
+one is not, how to start mlx-vlm; ``MlxVlmOfflineHint`` under the chat input asks when the model
+list is empty.
 """
 
 import logging
@@ -12,8 +16,9 @@ import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
 from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL
 from open_webui.routers.openai import clear_openai_model_cache, get_headers_and_cookies, get_openai_connection
-from open_webui.utils.auth import get_admin_user
+from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.json_codec import JSONCodec
+from open_webui.utils.mlx_vlm_offline import MLX_VLM_OFFLINE_HINT, unreachable_connections
 from open_webui.utils.models import get_all_models
 from open_webui.utils.prefill import offload_entry
 from pydantic import BaseModel
@@ -100,3 +105,13 @@ async def calibrate(request: Request, form_data: CalibrateForm, user=Depends(get
     # The models list is cached; drop it so the next fetch shows the new break_even_tokens.
     await clear_openai_model_cache(request)
     return result
+
+
+@router.get('/connection')
+async def connection(user=Depends(get_verified_user)) -> dict:
+    """``reachable``: every enabled OpenAI connection accepts a TCP connection within a second or
+    two; ``hint``: how to start mlx-vlm when one does not, else None."""
+    unreachable = await unreachable_connections()
+    if unreachable:
+        log.info('OpenAI connections not reachable: %s', ', '.join(unreachable))
+    return {'reachable': not unreachable, 'hint': MLX_VLM_OFFLINE_HINT if unreachable else None}

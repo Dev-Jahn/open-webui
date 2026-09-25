@@ -244,6 +244,7 @@ from open_webui.utils.middleware import (
     process_chat_response,
 )
 from open_webui.utils.misc import get_response_error_detail, merge_model_params
+from open_webui.utils.mlx_vlm_offline import offline_error, unknown_model_error
 from open_webui.utils.model_ids import strip_provider_model_prefix
 from open_webui.utils.models import (
     check_model_access,
@@ -1622,7 +1623,7 @@ async def chat_completion(
         log.warning(f'Error processing chat metadata: {e}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail=await unknown_model_error(str(e)),
         )
 
     async def process_chat(request, form_data, user, metadata, model, tasks=None):
@@ -1661,6 +1662,7 @@ async def chat_completion(
         except Exception as e:
             error_detail = e.detail if isinstance(e, HTTPException) else str(e)
             log.error('Error processing chat payload: %s', error_detail)
+            error_detail = await offline_error(request, model, error_detail)
             if metadata.get('chat_id') and metadata.get('message_id'):
                 # Update the chat message with the error
                 try:
