@@ -1,263 +1,126 @@
-# Open WebUI 👋
-
-![GitHub stars](https://img.shields.io/github/stars/open-webui/open-webui?style=social)
-![GitHub forks](https://img.shields.io/github/forks/open-webui/open-webui?style=social)
-![GitHub watchers](https://img.shields.io/github/watchers/open-webui/open-webui?style=social)
-![GitHub repo size](https://img.shields.io/github/repo-size/open-webui/open-webui)
-![GitHub language count](https://img.shields.io/github/languages/count/open-webui/open-webui)
-![GitHub top language](https://img.shields.io/github/languages/top/open-webui/open-webui)
-![GitHub last commit](https://img.shields.io/github/last-commit/open-webui/open-webui?color=red)
-[![Discord](https://img.shields.io/badge/Discord-Open_WebUI-blue?logo=discord&logoColor=white)](https://discord.gg/5rJgQTnV4s)
-[![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/open-webui)
-
-Open WebUI is **a home for AI**, a self-hosted AI platform that's **[extensible](https://docs.openwebui.com/features/extensibility/plugin/)**, **[feature-rich](https://docs.openwebui.com/features/)**, user-friendly, and built to run **[entirely offline](https://openwebui.com/sovereign-ai)**. With support for **Ollama** and **OpenAI-compatible APIs**, it gives you a powerful, provider-agnostic interface for both local and cloud-based models.
-
-Passionate about open-source AI? [Join our team →](https://careers.openwebui.com/)
-
-![Open WebUI Demo](./demo.png)
-
-> [!TIP]  
-> **Looking for an [Enterprise Plan](https://docs.openwebui.com/enterprise)?** – **[Speak with Our Sales Team Today!](https://docs.openwebui.com/enterprise)**
-
-For more information, be sure to check out our [Open WebUI Documentation](https://docs.openwebui.com/).
-
-## Key Features of Open WebUI ⭐
-
-- 🚀 **Effortless Setup**: Install seamlessly via pip, uv, Docker, or Kubernetes (kubectl, kustomize, or helm), with `:ollama` and `:cuda` tagged images available for container deployments.
-
-- 🤝 **Broad Model & API Integration**: Connect any OpenAI-compatible API alongside local Ollama models. Point the API URL at **LMStudio, GroqCloud, Mistral, OpenRouter, vLLM, and more** to mix and match providers freely.
-
-- 🔐 **Granular RBAC & User Groups**: Administrators define detailed roles, groups, and permissions, giving each user exactly the access they need. Secure by default, with tailored experiences per group.
-
-- 🧩 **Plugin Support**: Extend Open WebUI with **Filters**, **Actions**, **Pipes**, **Tools**, and **Skills**. Connect external services through **MCP**, **MCPO**, and **OpenAPI tool servers**. Build custom integrations, rate limits, approval flows, data connections, and more.
-
-- 🤖 **Models & Agents**: Wrap any base model with custom instructions, tools, and knowledge to build specialized agents. Supports dynamic variables, per-user/group access control, and community preset imports via [Open WebUI Community](https://openwebui.com/).
-
-- ⚡ **Agentic Execution with [Open Terminal](https://github.com/open-webui/open-terminal)**: Give your agents a terminal and filesystem to carry out multi-step tasks. Let them analyze data, run scripts, fix errors, and produce files directly in chat. Scale to teams with **[Terminals (Enterprise)](https://github.com/open-webui/terminals)** for per-user isolated environments, resource limits, and automatic lifecycle management.
-
-- 📝 **Notes**: A dedicated workspace for content outside conversations. Draft with a rich editor, use AI to rewrite selected text, and attach notes to any chat for full-context injection.
-
-- 📢 **Channels**: Real-time shared spaces where your team and AI models collaborate in one timeline. Tag models to draft or critique, with threads, reactions, pins, and access control.
-
-- 🧠 **Persistent Memory**: The AI remembers facts about you across conversations, carrying context from one chat to the next.
-
-- ✅ **Live Workflow & Message Flow**: Watch the AI build and work through checklists in real time. Queue messages while the AI is still responding; they send automatically when it's ready.
-
-- 📅 **Calendar & AI Scheduling**: Built-in personal and shared calendars with month/week/day views, recurring events, color coding, attendees, and reminders. Models manage your schedule conversationally through native function calling.
-
-- ⏱️ **Automations**: Schedule prompts to run on recurring schedules, with runs surfaced on your calendar and each completed run linking back to the chat it produced.
-
-- 📱 **Responsive Design & PWA**: Seamless experience across desktop, laptop, and mobile, with a Progressive Web App for native app-like feel and offline access on localhost.
-
-- ✒️🔢 **Full Markdown and LaTeX Support**: Comprehensive Markdown and LaTeX capabilities for enriched interaction.
-
-- 🎤📹 **Hands-Free Voice/Video Call**: Integrated voice and video calls with multiple Speech-to-Text providers (Local Whisper, OpenAI, Deepgram, Azure) and Text-to-Speech engines (Azure, ElevenLabs, OpenAI, Transformers, WebAPI).
-
-- 💾 **Persistent Artifact Storage**: Built-in key-value storage API for artifacts, enabling journals, trackers, leaderboards, and collaborative tools with personal and shared data scopes.
-
-- 📚 **Local RAG Integration**: Retrieval Augmented Generation backed by 9 vector databases and multiple content-extraction engines (Tika, Docling, Document Intelligence, Mistral OCR, PaddleOCR-vl, external loaders). Supports hybrid search (BM25 + vector) with reranking and full-context mode. Load documents into chat or pull them from your library with the `#` command.
-
-- 🔍 **Web Search for RAG**: Search the web through dozens of providers including `SearXNG`, `Google PSE`, `Brave Search`, `Kagi`, `Mojeek`, `Tavily`, `Perplexity`, `Firecrawl`, `serpstack`, `serper`, `Serply`, `DuckDuckGo`, `SearchApi`, `SerpApi`, `Bing`, `Jina`, `Exa`, `Sougou`, `Azure AI Search`, and `Ollama Cloud`, injecting results directly into the conversation.
-
-- 🌐 **Web Browsing Capability**: Pull websites into chat with the `#` command followed by a URL, or let the model fetch them on its own when needed.
-
-- 🎨 **Image Generation & Editing**: Create and edit images with multiple engines including OpenAI DALL·E, Gemini, ComfyUI (local), and AUTOMATIC1111 (local), supporting both generation and prompt-based editing.
-
-- ⚙️ **Multi-Model Conversations**: Engage several models at once, harnessing their individual strengths in parallel for the best possible responses.
-
-- 📊 **Usage Analytics & Model Evaluation**: Admin dashboards track message volume, token consumption, and cost across users and models. Evaluate models with a built-in arena, A/B testing, and ELO-based leaderboards.
-
-- 🗄️ **Flexible Database & Storage**: Choose SQLite (with optional encryption) or PostgreSQL, and store files locally or on S3, Google Cloud Storage, or Azure Blob Storage.
-
-- 🧬 **Advanced Vector Database Support**: Pick from 9 vector databases: ChromaDB, PGVector, Qdrant, Milvus, Elasticsearch, OpenSearch, Pinecone, S3Vector, and Oracle 23ai.
-
-- 🪪 **Enterprise Authentication & Provisioning**: Full LDAP/Active Directory integration, SSO via trusted headers and OAuth providers, and SCIM 2.0 automated provisioning for identity providers like Okta, Azure AD, and Google Workspace.
-
-- ☁️ **Cloud-Native File Integration**: Native Google Drive and OneDrive/SharePoint file picking for seamless document import from enterprise cloud storage.
-
-- 🔭 **Production Observability**: Built-in OpenTelemetry support for traces, metrics, and logs, plugging into your existing monitoring stack.
-
-- ⚖️ **Horizontal Scalability**: Redis-backed session management and WebSocket support for multi-worker, multi-node deployments behind load balancers.
-
-- 🌐🌍 **Multilingual Support**: Use Open WebUI in your preferred language with i18n support. We're actively seeking contributors to expand language coverage!
-
-- 🌟 **Continuous Updates**: We're committed to improving Open WebUI with regular updates, fixes, and new features.
-
-- 🛡️ **Transparent Security Process**: Security reports are triaged, fixed, and published as open advisories through a documented responsible-disclosure process. See our [Security Policy](https://github.com/open-webui/open-webui/security).
-
-Want to learn more about Open WebUI's features? Check out our [Open WebUI documentation](https://docs.openwebui.com/features) for a comprehensive overview!
-
-## The Open WebUI Ecosystem 🌐
-
-Open WebUI is the core, surrounded by companion apps and infrastructure that extend what your AI can do, where it can reach, and how you run it:
-
-- 💻 **Open WebUI Computer** ([open-webui/computer](https://github.com/open-webui/computer)): A standalone, mobile-first computer and coding agent that runs on the machine you own. Files, terminal, and git in a browser tab, reachable from your phone. Connect it into Open WebUI as a model, or reach it from Telegram, WhatsApp, and more.
-
-- ⚡ **Open Terminal** and **Terminals (Enterprise)** ([open-webui/open-terminal](https://github.com/open-webui/open-terminal) & [open-webui/terminals](https://github.com/open-webui/terminals)): A self-hosted computing environment that plugs into Open WebUI, giving the AI a place to write code, run it, read output, fix errors, and iterate inside the chat. Terminals gives you per-user isolated containers with separate credentials, resource limits, and network rules. Automatic lifecycle management on Docker or Kubernetes.
-
-- 🔄 **oikb** ([open-webui/oikb](https://github.com/open-webui/oikb)): Feed your Knowledge Bases from 45+ sources (GitHub, Confluence, ServiceNow, Salesforce, Jira, Slack, SharePoint, Notion, and more), keeping the tools your team already uses continuously in sync.
-
-- 🖥️ **Native Desktop App** ([open-webui/desktop](https://github.com/open-webui/desktop)): Run Open WebUI as a native app on macOS, Windows, and Linux. System-wide Spotlight chat bar with screenshot capture, push-to-talk voice, and optional fully-local inference via a built-in llama.cpp engine.
-
-Want to learn more? Check out our [Open WebUI documentation](https://docs.openwebui.com) for more details!
-
----
-
-We are incredibly grateful for the generous support of our sponsors. Their contributions help us to maintain and improve our project, ensuring we can continue to deliver quality work to our community. Thank you!
-
-## How to Install 🚀
-
-### Installation via Python pip 🐍
-
-Open WebUI can be installed using pip, the Python package installer. Before proceeding, ensure you're using **Python 3.11** to avoid compatibility issues.
-
-1. **Install Open WebUI**:
-   Open your terminal and run the following command to install Open WebUI:
-
-   ```bash
-   pip install open-webui
-   ```
-
-2. **Running Open WebUI**:
-   After installation, you can start Open WebUI by executing:
-
-   ```bash
-   open-webui serve
-   ```
-
-This will start the Open WebUI server, which you can access at [http://localhost:8080](http://localhost:8080)
-
-### Quick Start with Docker 🐳
-
-> [!NOTE]  
-> Please note that for certain Docker environments, additional configurations might be needed. If you encounter any connection issues, our detailed guide on [Open WebUI Documentation](https://docs.openwebui.com/) is ready to assist you.
-
-> [!WARNING]
-> When using Docker to install Open WebUI, make sure to include the `-v open-webui:/app/backend/data` in your Docker command. This step is crucial as it ensures your database is properly mounted and prevents any loss of data.
-
-> [!TIP]  
-> If you wish to utilize Open WebUI with Ollama included or CUDA acceleration, we recommend utilizing our official images tagged with either `:cuda` or `:ollama`. To enable CUDA, you must install the [Nvidia CUDA container toolkit](https://docs.nvidia.com/dgx/nvidia-container-runtime-upgrade/) on your Linux/WSL system.
-
-### Installation with Default Configuration
-
-- **If Ollama is on your computer**, use this command:
-
-  ```bash
-  docker run -d -p 3000:8080 --add-host=host.docker.internal:host-gateway -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:main
-  ```
-
-- **If Ollama is on a Different Server**, use this command:
-
-  To connect to Ollama on another server, change the `OLLAMA_BASE_URL` to the server's URL:
-
-  ```bash
-  docker run -d -p 3000:8080 -e OLLAMA_BASE_URL=https://example.com -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:main
-  ```
-
-- **To run Open WebUI with Nvidia GPU support**, use this command:
-
-  ```bash
-  docker run -d -p 3000:8080 --gpus all --add-host=host.docker.internal:host-gateway -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:cuda
-  ```
-
-### Installation for OpenAI API Usage Only
-
-- **If you're only using OpenAI API**, use this command:
-
-  ```bash
-  docker run -d -p 3000:8080 -e OPENAI_API_KEY=your_secret_key -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:main
-  ```
-
-### Installing Open WebUI with Bundled Ollama Support
-
-This installation method uses a single container image that bundles Open WebUI with Ollama, allowing for a streamlined setup via a single command. Choose the appropriate command based on your hardware setup:
-
-- **With GPU Support**:
-  Utilize GPU resources by running the following command:
-
-  ```bash
-  docker run -d -p 3000:8080 --gpus=all -v ollama:/root/.ollama -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:ollama
-  ```
-
-- **For CPU Only**:
-  If you're not using a GPU, use this command instead:
-
-  ```bash
-  docker run -d -p 3000:8080 -v ollama:/root/.ollama -v open-webui:/app/backend/data --name open-webui --restart always ghcr.io/open-webui/open-webui:ollama
-  ```
-
-Both commands facilitate a built-in, hassle-free installation of both Open WebUI and Ollama, ensuring that you can get everything up and running swiftly.
-
-After installation, you can access Open WebUI at [http://localhost:3000](http://localhost:3000). Enjoy! 😄
-
-### Other Installation Methods
-
-We offer various installation alternatives, including non-Docker native installation methods, Docker Compose, Kustomize, and Helm. Visit our [Open WebUI Documentation](https://docs.openwebui.com/getting-started/) or join our [Discord community](https://discord.gg/5rJgQTnV4s) for comprehensive guidance.
-
-### Troubleshooting
-
-Encountering connection issues? Our [Open WebUI Documentation](https://docs.openwebui.com/troubleshooting/) has got you covered. For further assistance and to join our vibrant community, visit the [Open WebUI Discord](https://discord.gg/5rJgQTnV4s).
-
-#### Open WebUI: Server Connection Error
-
-If you're experiencing connection issues, it’s often due to the WebUI docker container not being able to reach the Ollama server at 127.0.0.1:11434 (host.docker.internal:11434) inside the container . Use the `--network=host` flag in your docker command to resolve this. Note that the port changes from 3000 to 8080, resulting in the link: `http://localhost:8080`.
-
-**Example Docker Command**:
+# Custom Open WebUI fork for video inference
+
+A personal fork of [Open WebUI](https://github.com/open-webui/open-webui) that tracks upstream `main`. It adds video
+input for a local LLM server on Apple Silicon, today the owner's [mlx-vlm fork](https://github.com/Dev-Jahn/mlx-vlm),
+and a switch for mlx-vlm's prefill offload, which hands the prefill of a long prompt to another GPU machine, the
+prefill offload worker.
+Everything else is upstream Open WebUI; see the upstream repository and <https://docs.openwebui.com> for the rest.
+
+It is for personal use, and no upstream pull requests are planned. Fork code lives in its own files, and upstream
+files carry only a few hook lines, so upstream merges stay simple. `CLAUDE.md` lists every hook.
+
+## Models and servers
+
+- **Served today:** Qwen3.8-Flash-Next-Uncensored-MLX (architecture `qwen4_exp`, Qwen3-VL processor) on mlx-vlm,
+  port 8199.
+- **Video input** works with any OpenAI-compatible server that accepts the `video_frames` content part and lists
+  `video_input` on its `/v1/models` entries. mlx-vlm marks it supported for every model whose processor takes
+  videos. The frame math (Qwen `smart_resize`, 2-frame groups, token estimate) is Qwen-VL's, so models on the
+  Qwen3-VL processor get the whole feature: Qwen3-VL, Qwen3-VL-MoE, Qwen3.5, Qwen3.5-MoE and Qwen4-Exp. Per-frame
+  timestamps and a per-request pixel budget are sent only when the model's `video_input` says it uses them.
+- **Prefill offload** exists in mlx-vlm for Qwen4-Exp only. Its switch shows only for models that list
+  `prefill_offload.auto: true`.
+- **Other models** behave like upstream, except that a dropped video is refused ("Selected model(s) do not support
+  video inputs") instead of being uploaded as an ordinary file.
+
+The server contract is documented in mlx-vlm's `mlx_vlm/server/video_input.py`: a `video_frames` part carries
+`frames` (file paths or data URIs), `fps`, `duration` and optional `timestamps`; the request field
+`video_pixels.max_pixels` sets the pixel budget; `video` (local path) and `video_url` carry whole files.
+
+## What differs from upstream
+
+**Video input**
+
+- The browser samples the video itself, the Qwen standard way: the frame count is `duration × fps`, clamped between
+  the model's minimum and your max frames and rounded down to an even number, and the frames are spaced evenly from
+  the first to the last one. Each frame's real time comes from the decoder (`requestVideoFrameCallback`), and
+  repeated frames are dropped.
+- Frames are resized with Qwen `smart_resize` under a per-frame token cap and JPEG-encoded. The attachment tile shows
+  `N frames · W×H · ≈ tokens` before you send.
+- The frames are uploaded as one **frame bundle** (`uploads/video_frames/<id>/`, owner-checked). The backend turns it
+  into a `video_frames` part and sets `video_pixels.max_pixels` so the server's own resize changes nothing. Sent
+  bundles never change, so every later turn replays byte-identical media and hits mlx-vlm's prefix cache.
+- User messages put media first (images and videos in attachment order), then text, as Qwen expects. This also
+  applies after upstream's `<attached_files>` block.
+- Clicking the video poster in a sent message opens a flipbook player of the exact frames the model received.
+- Per-model **Video Input** settings in the chat Controls pane: mode (Sampled frames or Original file), max frames,
+  sampling fps and tokens per frame. They start from the server's `video_input` values; changing them re-extracts
+  videos that are not sent yet.
+- **Original file** mode uploads the video itself and sends `{"type": "video", "video": <path>}`, so the server
+  samples it.
+
+**Prefill offload**
+
+- An **Offload long prompts** switch per model and user (Controls pane, Prefill Offload section, on by default). On
+  lets mlx-vlm offload when the uncached prompt is longer than the break-even length and the worker accepts; off
+  keeps the prefill local.
+- Status lines on the reply show where the prefill runs and its progress ("Prefill offloading",
+  "Prefill (offload worker): 41%", "Prefill (local): 12%"), and end with "Prefill offloaded · N s" or
+  "Prefill done locally · N s". Only that last line is saved with the reply.
+- Notices such as a busy or unreachable offload worker also appear as a warning toast. The unreachable one adds how
+  to start the worker: "To use prefill offload: run prefill-worker start on the offload worker, or mlx-vlm-server
+  start --offload."
+- Admins get a **Measure** button that runs mlx-vlm's break-even benchmark (1-2 minutes) and applies the result.
+
+**Other**
+
+- While mlx-vlm is not running, a failed chat and an empty model list show "mlx-vlm server is not running. Start
+  it: mlx-vlm-server start --offload (or without --offload for local prefill only)." instead of upstream's
+  "Model not found" or connection errors.
+- A Docker build and compose setup for the permanent service, under `scripts/fork/`.
+
+## Running it
+
+The permanent setup is a Docker image built from this repo ([scripts/fork/README.md](scripts/fork/README.md)):
 
 ```bash
-docker run -d --network=host -v open-webui:/app/backend/data -e OLLAMA_BASE_URL=http://127.0.0.1:11434 --name open-webui --restart always ghcr.io/open-webui/open-webui:main
+scripts/fork/docker-build.sh                        # open-webui-fork:local; refuses uncommitted changes
+mkdir -p ~/.local/share/open-webui-fork             # first time only
+docker compose -f scripts/fork/compose.yaml up -d   # container open-webui-fork on http://localhost:8080
 ```
 
-### Keeping Your Docker Installation Up-to-Date
+- All state (database, uploads, frame bundles, session secret) lives in `~/.local/share/open-webui-fork`.
+- mlx-vlm runs natively on the host, listening on all interfaces at port 8199:
+  `mlx_vlm.server --model ~/models/<model> --host 0.0.0.0 --port 8199`. The container reaches it as
+  `host.docker.internal:8199`, and mlx-vlm reads the frame files from the host path (`VIDEO_SHARED_PATH`).
+- The hints in the UI name `mlx-vlm-server start [--offload]`, the owner's start script (not in this repo;
+  `--offload` also starts the offload worker). Set `MLX_VLM_OFFLINE_HINT` and `PREFILL_WORKER_UNREACHABLE_HINT` to
+  match another setup.
+- The connection URL and `TASK_MODEL_PARAMS` in `compose.yaml` only seed the database on the first start. Change them
+  later in Admin Panel > Settings.
 
-Check our Updating Guide available in our [Open WebUI Documentation](https://docs.openwebui.com/getting-started/updating).
-
-### Using the Dev Branch 🌙
-
-> [!WARNING]
-> The `:dev` branch contains the latest unstable features and changes. Use it at your own risk as it may have bugs or incomplete features.
-
-If you want to try out the latest bleeding-edge features and are okay with occasional instability, you can use the `:dev` tag like this:
+For development, the usual native setup works:
 
 ```bash
-docker run -d -p 3000:8080 -v open-webui:/app/backend/data --name open-webui --add-host=host.docker.internal:host-gateway --restart always ghcr.io/open-webui/open-webui:dev
+npm install && npm run dev                                   # frontend on :5173
+uv sync --frozen                                             # backend venv (Python 3.12)
+(cd backend && ../.venv/bin/uvicorn open_webui.main:app --port 8080 --host 127.0.0.1)
+NODE_OPTIONS=--max-old-space-size=8192 npm run build         # production build, served by the backend
+npx vitest run src/lib/utils/video                           # fork tests
+.venv/bin/python -m pytest -q backend/open_webui/test/test_{video,prefill,prefill_router,mlx_vlm_offline}.py
 ```
 
-### Offline Mode
+Open `http://localhost:8080`, not `127.0.0.1`: replies stream over Socket.IO, which rejects other origins.
 
-If you are running Open WebUI in an offline environment, you can set the `HF_HUB_OFFLINE` environment variable to `1` to prevent attempts to download models from the internet.
+| Environment variable | Meaning |
+|---|---|
+| `VIDEO_FRAMES_TRANSPORT` | `path` (default: the server reads frame files) or `data_uri` (frames inline) |
+| `VIDEO_SHARED_PATH` | The uploads directory as the LLM server sees it (for Docker) |
+| `PREFILL_WORKER_UNREACHABLE_HINT` | Text added when the offload worker is unreachable; empty turns it off |
+| `MLX_VLM_OFFLINE_HINT` | The message shown while mlx-vlm is not running |
 
-```bash
-export HF_HUB_OFFLINE=1
-```
+## Known limitations
 
-## What's Next? 🌟
+- Temporary chats refuse video: their messages never pass through the backend step that adds the frames.
+- Firefox is refused in Sampled frames mode because it reports the requested seek time, not the frame's time.
+  Use Chrome or Safari, or Original file mode.
+- One chat cannot mix Sampled frames and Original file modes (one pixel budget per request).
+- Presets use their base model's `video_input` only when `base_model_id` matches exactly. Connections with an explicit
+  model list do not carry `video_input`.
+- Multi-turn chats with a video need mlx-vlm commit 74324f05 or later.
+- Frame bundles are not deleted with their chat; remove `uploads/video_frames/` entries by hand if needed.
 
-Discover upcoming features on our roadmap in the [Open WebUI Documentation](https://docs.openwebui.com/roadmap/).
+## License
 
-## License 📜
-
-This project contains code under multiple licenses. The current codebase includes components licensed under the Open WebUI License with an additional requirement to preserve the "Open WebUI" branding, as well as prior contributions under their respective original licenses. For a detailed record of license changes and the applicable terms for each section of the code, please refer to [LICENSE_HISTORY](./LICENSE_HISTORY). For complete and updated licensing details, please see the [LICENSE](./LICENSE) and [LICENSE_HISTORY](./LICENSE_HISTORY) files.
-
-## Support 💬
-
-If you have any questions, suggestions, or need assistance, please open an issue or join our
-[Open WebUI Discord community](https://discord.gg/5rJgQTnV4s) to connect with us! 🤝
-
-## Security 🛡️
-
-If you believe you've found a security vulnerability, or something that shouldn't be disclosed publicly, please [reach out confidentially through our responsible disclosure program on GitHub](https://github.com/open-webui/open-webui/security). We accept reports only through GitHub, not through any other platform. Thank you for helping us keep Open WebUI secure!
-
-## Star History
-
-<a href="https://star-history.com/#open-webui/open-webui&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=open-webui/open-webui&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=open-webui/open-webui&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=open-webui/open-webui&type=Date" />
-  </picture>
-</a>
-
----
-
-Created by [Timothy Jaeryang Baek](https://github.com/tjbck) - Let's make Open WebUI even more amazing together! 💪
+This fork remains under the upstream [Open WebUI License](LICENSE), including its branding terms. See also
+`LICENSE_HISTORY` and `LICENSE_NOTICE`.
